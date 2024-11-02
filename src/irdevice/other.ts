@@ -83,7 +83,7 @@ export class Others extends irdeviceBase {
     this.getOtherConfigSettings(accessory, device)
 
     // deviceType
-    if (this.otherDeviceType === 'switch') {
+    if (this.otherDeviceType === 'Switch') {
       // Set category
       accessory.category = this.hap.Categories.SWITCH
       // Initialize Switch Service
@@ -106,7 +106,7 @@ export class Others extends irdeviceBase {
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'garagedoor') {
+    } else if (this.otherDeviceType === 'GarageDoor') {
       // Set category
       accessory.category = this.hap.Categories.GARAGE_DOOR_OPENER
       // Initialize GarageDoor Service
@@ -134,7 +134,7 @@ export class Others extends irdeviceBase {
       this.removeWindowService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'door') {
+    } else if (this.otherDeviceType === 'Door') {
       // Set category
       accessory.category = this.hap.Categories.DOOR
       // Initialize Door Service
@@ -162,7 +162,7 @@ export class Others extends irdeviceBase {
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'window') {
+    } else if (this.otherDeviceType === 'Window') {
       // Set category
       accessory.category = this.hap.Categories.WINDOW
       // Initialize Window Service
@@ -190,7 +190,7 @@ export class Others extends irdeviceBase {
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'windowcovering') {
+    } else if (this.otherDeviceType === 'WindowCovering') {
       // Set category
       accessory.category = this.hap.Categories.WINDOW_COVERING
       // Initialize WindowCovering Service
@@ -218,7 +218,7 @@ export class Others extends irdeviceBase {
       this.removeWindowService(accessory)
       this.removeGarageDoorService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'lock') {
+    } else if (this.otherDeviceType === 'Lock') {
       // Set category
       accessory.category = this.hap.Categories.DOOR_LOCK
       // Initialize Lock Service
@@ -241,7 +241,7 @@ export class Others extends irdeviceBase {
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'faucet') {
+    } else if (this.otherDeviceType === 'Faucet') {
       // Set category
       accessory.category = this.hap.Categories.FAUCET
       // Initialize Faucet Service
@@ -264,7 +264,7 @@ export class Others extends irdeviceBase {
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'fan') {
+    } else if (this.otherDeviceType === 'Fan') {
       // Set category
       accessory.category = this.hap.Categories.FAN
       // Initialize Fan Service
@@ -287,7 +287,7 @@ export class Others extends irdeviceBase {
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
       this.removeStatefulProgrammableSwitchService(accessory)
-    } else if (this.otherDeviceType === 'stateful') {
+    } else if (this.otherDeviceType === 'Stateful') {
       // Set category
       accessory.category = this.hap.Categories.PROGRAMMABLE_SWITCH
       // Initialize StatefulProgrammableSwitch Service
@@ -310,7 +310,7 @@ export class Others extends irdeviceBase {
       this.removeWindowService(accessory)
       this.removeGarageDoorService(accessory)
       this.removeWindowCoveringService(accessory)
-    } else if (this.otherDeviceType === 'outlet') {
+    } else if (this.otherDeviceType === 'Outlet') {
       // Set category
       accessory.category = this.hap.Categories.OUTLET
       // Initialize Switch property
@@ -342,49 +342,49 @@ export class Others extends irdeviceBase {
    * Handle requests to set the "On" characteristic
    */
   async OnSet(value: CharacteristicValue): Promise<void> {
-    if (this.otherDeviceType === 'switch') {
+    if (this.otherDeviceType === 'Switch') {
       if (this.Switch) {
-        await this.debugLog(`Set On: ${value}`)
+        this.debugLog(`Set On: ${value}`)
         this.On = value !== false
       }
-    } else if (this.otherDeviceType === 'garagedoor') {
+    } else if (this.otherDeviceType === 'GarageDoor') {
       if (this.GarageDoor) {
-        await this.debugLog(`Set TargetDoorState: ${value}`)
+        this.debugLog(`Set TargetDoorState: ${value}`)
         this.On = value !== this.hap.Characteristic.TargetDoorState.CLOSED
       }
-    } else if (this.otherDeviceType === 'door') {
+    } else if (this.otherDeviceType === 'Door') {
       if (this.Door) {
-        await this.debugLog(`Set TargetPosition: ${value}`)
+        this.debugLog(`Set TargetPosition: ${value}`)
         this.On = value !== 0
       }
-    } else if (this.otherDeviceType === 'window') {
+    } else if (this.otherDeviceType === 'Window') {
       if (this.Window) {
-        await this.debugLog(`Set TargetPosition: ${value}`)
+        this.debugLog(`Set TargetPosition: ${value}`)
         this.On = value !== 0
       }
-    } else if (this.otherDeviceType === 'windowcovering') {
+    } else if (this.otherDeviceType === 'WindowCovering') {
       if (this.WindowCovering) {
-        await this.debugLog(`Set TargetPosition: ${value}`)
+        this.debugLog(`Set TargetPosition: ${value}`)
         this.On = value !== 0
       }
-    } else if (this.otherDeviceType === 'lock') {
+    } else if (this.otherDeviceType === 'Lock') {
       if (this.LockMechanism) {
-        await this.debugLog(`Set LockTargetState: ${value}`)
+        this.debugLog(`Set LockTargetState: ${value}`)
         this.On = value !== this.hap.Characteristic.LockTargetState.SECURED
       }
-    } else if (this.otherDeviceType === 'faucet') {
+    } else if (this.otherDeviceType === 'Faucet') {
       if (this.Faucet) {
-        await this.debugLog(`Set Active: ${value}`)
+        this.debugLog(`Set Active: ${value}`)
         this.On = value !== this.hap.Characteristic.Active.INACTIVE
       }
-    } else if (this.otherDeviceType === 'stateful') {
+    } else if (this.otherDeviceType === 'Stateful') {
       if (this.StatefulProgrammableSwitch) {
-        await this.debugLog(`Set ProgrammableSwitchOutputState: ${value}`)
+        this.debugLog(`Set ProgrammableSwitchOutputState: ${value}`)
         this.On = value !== 0
       }
     } else {
       if (this.Outlet) {
-        await this.debugLog(`Set On: ${value}`)
+        this.debugLog(`Set On: ${value}`)
         this.On = value !== false
       }
     }
@@ -407,7 +407,7 @@ export class Others extends irdeviceBase {
    * Other -       "command"       "channelSub"      "default"          =        previous channel
    */
   async pushOnChanges(On: boolean): Promise<void> {
-    await this.debugLog(`pushOnChanges On: ${On}, disablePushOn: ${this.disablePushOn}, customize: ${this.device.customize}, customOn: ${this.device.customOn}`)
+    this.debugLog(`pushOnChanges On: ${On}, disablePushOn: ${this.disablePushOn}, customize: ${this.device.customize}, customOn: ${this.device.customOn}`)
     if (this.device.customize) {
       if (On === true && !this.disablePushOn) {
         const commandType: string = await this.commandType()
@@ -425,7 +425,7 @@ export class Others extends irdeviceBase {
   }
 
   async pushOffChanges(On: boolean): Promise<void> {
-    await this.debugLog(`pushOffChanges On: ${On}, disablePushOff: ${this.disablePushOff}, customize: ${this.device.customize}, customOff: ${this.device.customOff}`)
+    this.debugLog(`pushOffChanges On: ${On}, disablePushOff: ${this.disablePushOff}, customize: ${this.device.customize}, customOff: ${this.device.customOff}`)
     if (this.device.customize) {
       if (On === false && !this.disablePushOff) {
         const commandType: string = await this.commandType()
@@ -443,12 +443,12 @@ export class Others extends irdeviceBase {
   }
 
   async pushChanges(bodyChange: any): Promise<void> {
-    await this.debugLog('pushChanges')
+    this.debugLog('pushChanges')
     if (this.device.connectionType === 'OpenAPI') {
-      await this.infoLog(`Sending request to SwitchBot API, body: ${JSON.stringify(bodyChange)}`)
+      this.infoLog(`Sending request to SwitchBot API, body: ${JSON.stringify(bodyChange)}`)
       try {
-        const { body } = await this.pushChangeRequest(bodyChange)
-        const deviceStatus: any = await body
+        const response = await this.pushChangeRequest(bodyChange)
+        const deviceStatus: any = response.body
         await this.pushStatusCodes(deviceStatus)
         if (await this.successfulStatusCodes(deviceStatus)) {
           await this.successfulPushChange(deviceStatus, bodyChange)
@@ -461,198 +461,198 @@ export class Others extends irdeviceBase {
         await this.pushChangeError(e)
       }
     } else {
-      await this.warnLog(`Connection Type: ${this.device.connectionType}, commands will not be sent to OpenAPI`)
+      this.warnLog(`Connection Type: ${this.device.connectionType}, commands will not be sent to OpenAPI`)
     }
   }
 
   async updateHomeKitCharacteristics(): Promise<void> {
-    await this.debugLog('updateHomeKitCharacteristics')
+    this.debugLog('updateHomeKitCharacteristics')
     // State
-    if (this.otherDeviceType === 'switch' && this.Switch) {
+    if (this.otherDeviceType === 'Switch' && this.Switch) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         this.Switch.Service.updateCharacteristic(this.hap.Characteristic.On, this.On)
-        await this.debugLog(`updateCharacteristic On: ${this.On}`)
+        this.debugLog(`updateCharacteristic On: ${this.On}`)
       }
-    } else if (this.otherDeviceType === 'garagedoor' && this.GarageDoor) {
+    } else if (this.otherDeviceType === 'GarageDoor' && this.GarageDoor) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.TargetDoorState, this.hap.Characteristic.TargetDoorState.OPEN)
           this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.CurrentDoorState, this.hap.Characteristic.CurrentDoorState.OPEN)
-          await this.debugLog(`updateCharacteristic TargetDoorState: Open, CurrentDoorState: Open (${this.On})`)
+          this.debugLog(`updateCharacteristic TargetDoorState: Open, CurrentDoorState: Open (${this.On})`)
         } else {
           this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.TargetDoorState, this.hap.Characteristic.TargetDoorState.CLOSED)
           this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.CurrentDoorState, this.hap.Characteristic.CurrentDoorState.CLOSED)
-          await this.debugLog(`updateCharacteristicc TargetDoorState: Closed, CurrentDoorState: Closed (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetDoorState: Closed, CurrentDoorState: Closed (${this.On})`)
         }
       }
-      await this.debugLog(`Garage Door On: ${this.On}`)
-    } else if (this.otherDeviceType === 'door' && this.Door) {
+      this.debugLog(`Garage Door On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Door' && this.Door) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.Door.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, 100)
           this.Door.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, 100)
           this.Door.Service.updateCharacteristic(this.hap.Characteristic.PositionState, this.hap.Characteristic.PositionState.STOPPED)
-          await this.debugLog(`updateCharacteristicc TargetPosition: 100, CurrentPosition: 100 (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetPosition: 100, CurrentPosition: 100 (${this.On})`)
         } else {
           this.Door.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, 0)
           this.Door.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, 0)
           this.Door.Service.updateCharacteristic(this.hap.Characteristic.PositionState, this.hap.Characteristic.PositionState.STOPPED)
-          await this.debugLog(`updateCharacteristicc TargetPosition: 0, CurrentPosition: 0 (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetPosition: 0, CurrentPosition: 0 (${this.On})`)
         }
       }
-      await this.debugLog(`Door On: ${this.On}`)
-    } else if (this.otherDeviceType === 'window' && this.Window) {
+      this.debugLog(`Door On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Window' && this.Window) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.Window.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, 100)
           this.Window.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, 100)
           this.Window.Service.updateCharacteristic(this.hap.Characteristic.PositionState, this.hap.Characteristic.PositionState.STOPPED)
-          await this.debugLog(`updateCharacteristicc TargetPosition: 100, CurrentPosition: 100 (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetPosition: 100, CurrentPosition: 100 (${this.On})`)
         } else {
           this.Window.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, 0)
           this.Window.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, 0)
           this.Window.Service.updateCharacteristic(this.hap.Characteristic.PositionState, this.hap.Characteristic.PositionState.STOPPED)
-          await this.debugLog(`updateCharacteristicc TargetPosition: 0, CurrentPosition: 0 (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetPosition: 0, CurrentPosition: 0 (${this.On})`)
         }
       }
-      await this.debugLog(`Window On: ${this.On}`)
-    } else if (this.otherDeviceType === 'windowcovering' && this.WindowCovering) {
+      this.debugLog(`Window On: ${this.On}`)
+    } else if (this.otherDeviceType === 'WindowCovering' && this.WindowCovering) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, 100)
           this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, 100)
           this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.PositionState, this.hap.Characteristic.PositionState.STOPPED)
-          await this.debugLog(`updateCharacteristicc TargetPosition: 100, CurrentPosition: 100 (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetPosition: 100, CurrentPosition: 100 (${this.On})`)
         } else {
           this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, 0)
           this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, 0)
           this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.PositionState, this.hap.Characteristic.PositionState.STOPPED)
-          await this.debugLog(`updateCharacteristicc TargetPosition: 0, CurrentPosition: 0 (${this.On})`)
+          this.debugLog(`updateCharacteristicc TargetPosition: 0, CurrentPosition: 0 (${this.On})`)
         }
       }
-      await this.debugLog(`Window Covering On: ${this.On}`)
-    } else if (this.otherDeviceType === 'lock' && this.LockMechanism) {
+      this.debugLog(`Window Covering On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Lock' && this.LockMechanism) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.LockMechanism.Service.updateCharacteristic(this.hap.Characteristic.LockTargetState, this.hap.Characteristic.LockTargetState.UNSECURED)
           this.LockMechanism.Service.updateCharacteristic(this.hap.Characteristic.LockCurrentState, this.hap.Characteristic.LockCurrentState.UNSECURED)
-          await this.debugLog(`updateCharacteristicc LockTargetState: UNSECURED, LockCurrentState: UNSECURED (${this.On})`)
+          this.debugLog(`updateCharacteristicc LockTargetState: UNSECURED, LockCurrentState: UNSECURED (${this.On})`)
         } else {
           this.LockMechanism.Service.updateCharacteristic(this.hap.Characteristic.LockTargetState, this.hap.Characteristic.LockTargetState.SECURED)
           this.LockMechanism.Service.updateCharacteristic(this.hap.Characteristic.LockCurrentState, this.hap.Characteristic.LockCurrentState.SECURED)
-          await this.debugLog(`updateCharacteristic LockTargetState: SECURED, LockCurrentState: SECURED  (${this.On})`)
+          this.debugLog(`updateCharacteristic LockTargetState: SECURED, LockCurrentState: SECURED  (${this.On})`)
         }
       }
-      await this.debugLog(`Lock On: ${this.On}`)
-    } else if (this.otherDeviceType === 'faucet' && this.Faucet) {
+      this.debugLog(`Lock On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Faucet' && this.Faucet) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.Faucet.Service.updateCharacteristic(this.hap.Characteristic.Active, this.hap.Characteristic.Active.ACTIVE)
-          await this.debugLog(`updateCharacteristic Active: ${this.On}`)
+          this.debugLog(`updateCharacteristic Active: ${this.On}`)
         } else {
           this.Faucet.Service.updateCharacteristic(this.hap.Characteristic.Active, this.hap.Characteristic.Active.INACTIVE)
-          await this.debugLog(`updateCharacteristic Active: ${this.On}`)
+          this.debugLog(`updateCharacteristic Active: ${this.On}`)
         }
       }
-      await this.debugLog(`Faucet On: ${this.On}`)
-    } else if (this.otherDeviceType === 'fan' && this.Fan) {
+      this.debugLog(`Faucet On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Fan' && this.Fan) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.Fan.Service.updateCharacteristic(this.hap.Characteristic.Active, this.hap.Characteristic.Active.ACTIVE)
-          await this.debugLog(`updateCharacteristic Active: ${this.On}`)
+          this.debugLog(`updateCharacteristic Active: ${this.On}`)
         } else {
           this.Fan.Service.updateCharacteristic(this.hap.Characteristic.Active, this.hap.Characteristic.Active.INACTIVE)
-          await this.debugLog(`updateCharacteristic Active: ${this.On}`)
+          this.debugLog(`updateCharacteristic Active: ${this.On}`)
         }
       }
-      await this.debugLog(`Fan On: ${this.On}`)
-    } else if (this.otherDeviceType === 'stateful' && this.StatefulProgrammableSwitch) {
+      this.debugLog(`Fan On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Stateful' && this.StatefulProgrammableSwitch) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         if (this.On) {
           this.StatefulProgrammableSwitch.Service.updateCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent, this.hap.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS)
           this.StatefulProgrammableSwitch.Service.updateCharacteristic(this.hap.Characteristic.ProgrammableSwitchOutputState, 1)
-          await this.debugLog(`updateCharacteristic ProgrammableSwitchEvent: ProgrammableSwitchOutputState: (${this.On})`)
+          this.debugLog(`updateCharacteristic ProgrammableSwitchEvent: ProgrammableSwitchOutputState: (${this.On})`)
         } else {
           this.StatefulProgrammableSwitch.Service.updateCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent, this.hap.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS)
           this.StatefulProgrammableSwitch.Service.updateCharacteristic(this.hap.Characteristic.ProgrammableSwitchOutputState, 0)
-          await this.debugLog(`updateCharacteristic ProgrammableSwitchEvent: ProgrammableSwitchOutputState: (${this.On})`)
+          this.debugLog(`updateCharacteristic ProgrammableSwitchEvent: ProgrammableSwitchOutputState: (${this.On})`)
         }
       }
-      await this.debugLog(`StatefulProgrammableSwitch On: ${this.On}`)
-    } else if (this.otherDeviceType === 'outlet' && this.Outlet) {
+      this.debugLog(`StatefulProgrammableSwitch On: ${this.On}`)
+    } else if (this.otherDeviceType === 'Outlet' && this.Outlet) {
       if (this.On === undefined) {
-        await this.debugLog(`On: ${this.On}`)
+        this.debugLog(`On: ${this.On}`)
       } else {
         this.Outlet.Service.updateCharacteristic(this.hap.Characteristic.On, this.On)
-        await this.debugLog(`updateCharacteristic On: ${this.On}`)
+        this.debugLog(`updateCharacteristic On: ${this.On}`)
       }
     } else {
-      await this.errorLog(`otherDeviceType: ${this.otherDeviceType}, On: ${this.On}`)
+      this.errorLog(`otherDeviceType: ${this.otherDeviceType}, On: ${this.On}`)
     }
   }
 
   async apiError(e: any): Promise<void> {
-    if (this.otherDeviceType === 'garagedoor') {
+    if (this.otherDeviceType === 'GarageDoor') {
       if (this.GarageDoor) {
         this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.TargetDoorState, e)
         this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.CurrentDoorState, e)
         this.GarageDoor.Service.updateCharacteristic(this.hap.Characteristic.ObstructionDetected, e)
       }
-    } else if (this.otherDeviceType === 'door') {
+    } else if (this.otherDeviceType === 'Door') {
       if (this.Door) {
         this.Door.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, e)
         this.Door.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, e)
         this.Door.Service.updateCharacteristic(this.hap.Characteristic.PositionState, e)
       }
-    } else if (this.otherDeviceType === 'window') {
+    } else if (this.otherDeviceType === 'Window') {
       if (this.Window) {
         this.Window.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, e)
         this.Window.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, e)
         this.Window.Service.updateCharacteristic(this.hap.Characteristic.PositionState, e)
       }
-    } else if (this.otherDeviceType === 'windowcovering') {
+    } else if (this.otherDeviceType === 'WindowCovering') {
       if (this.WindowCovering) {
         this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.TargetPosition, e)
         this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.CurrentPosition, e)
         this.WindowCovering.Service.updateCharacteristic(this.hap.Characteristic.PositionState, e)
       }
-    } else if (this.otherDeviceType === 'lock') {
+    } else if (this.otherDeviceType === 'Lock') {
       if (this.LockMechanism) {
         this.LockMechanism.Service.updateCharacteristic(this.hap.Characteristic.LockTargetState, e)
         this.LockMechanism.Service.updateCharacteristic(this.hap.Characteristic.LockCurrentState, e)
       }
-    } else if (this.otherDeviceType === 'faucet') {
+    } else if (this.otherDeviceType === 'Faucet') {
       if (this.Faucet) {
         this.Faucet.Service.updateCharacteristic(this.hap.Characteristic.Active, e)
       }
-    } else if (this.otherDeviceType === 'fan') {
+    } else if (this.otherDeviceType === 'Fan') {
       if (this.Fan) {
         this.Fan.Service.updateCharacteristic(this.hap.Characteristic.On, e)
       }
-    } else if (this.otherDeviceType === 'stateful') {
+    } else if (this.otherDeviceType === 'Stateful') {
       if (this.StatefulProgrammableSwitch) {
         this.StatefulProgrammableSwitch.Service.updateCharacteristic(this.hap.Characteristic.ProgrammableSwitchEvent, e)
         this.StatefulProgrammableSwitch.Service.updateCharacteristic(this.hap.Characteristic.ProgrammableSwitchOutputState, e)
       }
-    } else if (this.otherDeviceType === 'switch') {
+    } else if (this.otherDeviceType === 'Switch') {
       if (this.Switch) {
         this.Switch.Service.updateCharacteristic(this.hap.Characteristic.On, e)
       }
@@ -784,8 +784,8 @@ export class Others extends irdeviceBase {
   }
 
   async getOtherConfigSettings(accessory: PlatformAccessory, device: irdevice & irDevicesConfig): Promise<void> {
-    this.otherDeviceType = (device as irOtherConfig).type ?? 'outlet'
+    this.otherDeviceType = (device as irOtherConfig).type ?? 'Outlet'
     const deviceType = (device as irOtherConfig).type ? 'Device Config' : 'Default'
-    await this.debugLog(`Use ${deviceType} Device Type: ${this.otherDeviceType}`)
+    this.debugLog(`Use ${deviceType} Device Type: ${this.otherDeviceType}`)
   }
 }

@@ -8,7 +8,7 @@ import type { PlatformConfig } from 'homebridge'
 * For Testing Locally:
 * import type { device, irdevice, SwitchBotBLEModel, SwitchBotBLEModelFriendlyName, SwitchBotBLEModelName } from '/Users/Shared/GitHub/OpenWonderLabs/node-switchbot/dist/index.js';
 */
-import type { device, irdevice, SwitchBotBLEModel, SwitchBotBLEModelFriendlyName, SwitchBotBLEModelName } from 'node-switchbot'
+import type { device, irdevice, SwitchBotBLEModel, SwitchBotBLEModelFriendlyName, SwitchBotBLEModelName, SwitchBotModel } from 'node-switchbot'
 /**
  * This is the name of the platform that users will use to register the plugin in the Homebridge config.json
  */
@@ -23,7 +23,6 @@ export const PLUGIN_NAME = '@switchbot/homebridge-switchbot'
 export interface SwitchBotPlatformConfig extends PlatformConfig {
   credentials?: credentials
   options?: options
-  deviceConfig?: { [deviceType: string]: devicesConfig }
 }
 interface credentials {
   token?: string
@@ -57,7 +56,7 @@ export type devicesConfig = botConfig | meterConfig | indoorOutdoorSensorConfig 
 
 export interface BaseDeviceConfig extends device {
   bleMac?: string
-  model: string
+  model: SwitchBotModel
   bleModel: SwitchBotBLEModel
   bleModelName: SwitchBotBLEModelName
   bleModelFriednlyName: SwitchBotBLEModelFriendlyName
@@ -97,7 +96,7 @@ export interface botConfig extends BaseDeviceConfig {
 };
 
 export interface meterConfig extends BaseDeviceConfig {
-  configDeviceType: 'Meter' | 'MeterPlus'
+  configDeviceType: 'Meter' | 'MeterPlus' | 'Meter Pro' | 'Meter Pro CO2'
   hide_temperature?: boolean
   convertUnitTo?: string
   hide_humidity?: boolean

@@ -30,7 +30,7 @@ export abstract class irdeviceBase {
     this.config = this.platform.config
     this.hap = this.api.hap
 
-    this.getDeviceLogSettings(device)
+    this.getDeviceLogSettings(accessory, device)
     this.getDeviceConfigSettings(device)
     this.getDeviceContext(accessory, device)
     this.disablePushOnChanges(device)
@@ -48,20 +48,11 @@ export abstract class irdeviceBase {
       .setCharacteristic(this.hap.Characteristic.SerialNumber, device.deviceId)
   }
 
-  async getDeviceLogSettings(device: irdevice & irDevicesConfig): Promise<void> {
-    if (this.platform.debugMode) {
-      this.deviceLogging = this.accessory.context.logging = 'debugMode'
-      await this.debugWarnLog(`Using Debug Mode Logging: ${this.deviceLogging}`)
-    } else if (device.logging) {
-      this.deviceLogging = this.accessory.context.logging = device.logging
-      await this.debugWarnLog(`Using Device Config Logging: ${this.deviceLogging}`)
-    } else if (this.config.logging) {
-      this.deviceLogging = this.accessory.context.logging = this.config.logging
-      await this.debugWarnLog(`Using Platform Config Logging: ${this.deviceLogging}`)
-    } else {
-      this.deviceLogging = this.accessory.context.logging = 'standard'
-      await this.debugWarnLog(`Logging Not Set, Using: ${this.deviceLogging}`)
-    }
+  async getDeviceLogSettings(accessory: PlatformAccessory, device: irdevice & irDevicesConfig): Promise<void> {
+    this.deviceLogging = this.platform.debugMode ? 'debugMode' : device.logging ?? this.platform.platformLogging ?? 'standard'
+    const logging = this.platform.debugMode ? 'Debug Mode' : device.logging ? 'Device Config' : this.platform.platformLogging ? 'Platform Config' : 'Default'
+    accessory.context.deviceLogging = this.deviceLogging
+    this.debugLog(`Using ${logging} Logging: ${this.deviceLogging}`)
   }
 
   async getDeviceConfigSettings(device: irdevice & irDevicesConfig): Promise<void> {
@@ -116,7 +107,7 @@ export abstract class irdeviceBase {
 
     const deviceFirmwareVersion = device.firmware ?? accessory.context.version ?? this.platform.version ?? '0.0.0'
     const version = deviceFirmwareVersion.toString()
-    await this.debugLog(`version: ${version?.replace(/^V|-.*$/g, '')}`)
+    this.debugLog(`version: ${version?.replace(/^V|-.*$/g, '')}`)
     let deviceVersion: string
     if (version?.includes('.') === false) {
       const replace = version?.replace(/^V|-.*$/g, '')
@@ -158,19 +149,19 @@ export abstract class irdeviceBase {
    */
   async updateCharacteristic(Service: Service, Characteristic: any, CharacteristicValue: CharacteristicValue | undefined, CharacteristicName: string): Promise<void> {
     if (CharacteristicValue === undefined) {
-      await this.debugLog(`${CharacteristicName}: ${CharacteristicValue}`)
+      this.debugLog(`${CharacteristicName}: ${CharacteristicValue}`)
     } else {
       Service.updateCharacteristic(Characteristic, CharacteristicValue)
-      await this.debugLog(`updateCharacteristic ${CharacteristicName}: ${CharacteristicValue}`)
-      await this.debugWarnLog(`${CharacteristicName} context before: ${this.accessory.context[CharacteristicName]}`)
+      this.debugLog(`updateCharacteristic ${CharacteristicName}: ${CharacteristicValue}`)
+      this.debugWarnLog(`${CharacteristicName} context before: ${this.accessory.context[CharacteristicName]}`)
       this.accessory.context[CharacteristicName] = CharacteristicValue
-      await this.debugWarnLog(`${CharacteristicName} context after: ${this.accessory.context[CharacteristicName]}`)
+      this.debugWarnLog(`${CharacteristicName} context after: ${this.accessory.context[CharacteristicName]}`)
     }
   }
 
   async pushStatusCodes(deviceStatus: any) {
-    await this.debugWarnLog(`deviceStatus: ${JSON.stringify(deviceStatus)}`)
-    await this.debugWarnLog(`deviceStatus statusCode: ${deviceStatus.statusCode}`)
+    this.debugWarnLog(`deviceStatus: ${JSON.stringify(deviceStatus)}`)
+    this.debugWarnLog(`deviceStatus statusCode: ${deviceStatus.statusCode}`)
   }
 
   async successfulPushChange(deviceStatus: any, bodyChange: any) {
