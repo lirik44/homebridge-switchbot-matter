@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. This project uses [Semantic Versioning](https://semver.org/)
 
+## [4.1.2](https://github.com/OpenWonderLabs/homebridge-switchbot/releases/tag/v4.1.2) (2024-11-04)
+
+### What's Changed
+- Fix refreshRate Issue
+
+**Full Changelog**: https://github.com/OpenWonderLabs/homebridge-switchbot/compare/v4.1.1...v4.1.2
+
 ## [4.1.1](https://github.com/OpenWonderLabs/homebridge-switchbot/releases/tag/v4.1.1) (2024-11-02)
 
 ### What's Changed

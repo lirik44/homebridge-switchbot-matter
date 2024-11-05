@@ -66,11 +66,10 @@ export abstract class deviceBase {
     this.BLE = this.device.connectionType === 'BLE' || this.device.connectionType === 'BLE/OpenAPI'
     this.OpenAPI = this.device.connectionType === 'OpenAPI' || this.device.connectionType === 'BLE/OpenAPI'
 
-    this.getDeviceLogSettings(accessory, device)
-    this.getDeviceRateSettings(accessory, device)
+    this.getDeviceLogSettings(device)
+    this.getDeviceRateSettings(device)
     this.getDeviceConfigSettings(device)
     this.getDeviceContext(accessory, device)
-    this.getDeviceScanDuration(accessory, device)
     this.getMqttSettings(device)
 
     // Set accessory information
@@ -85,25 +84,21 @@ export abstract class deviceBase {
       .setCharacteristic(this.hap.Characteristic.SerialNumber, device.deviceId)
   }
 
-  async getDeviceLogSettings(accessory: PlatformAccessory, device: device & devicesConfig): Promise<void> {
+  async getDeviceLogSettings(device: device & devicesConfig): Promise<void> {
     this.deviceLogging = this.platform.debugMode ? 'debugMode' : device.logging ?? this.platform.platformLogging ?? 'standard'
     const logging = this.platform.debugMode ? 'Debug Mode' : device.logging ? 'Device Config' : this.platform.platformLogging ? 'Platform Config' : 'Default'
-    accessory.context.deviceLogging = this.deviceLogging
     this.debugLog(`Using ${logging} Logging: ${this.deviceLogging}`)
   }
 
-  async getDeviceRateSettings(accessory: PlatformAccessory, device: device & devicesConfig): Promise<void> {
+  async getDeviceRateSettings(device: device & devicesConfig): Promise<void> {
     // refreshRate
-    this.deviceRefreshRate = device.refreshRate ?? this.platform.platformRefreshRate ?? 5
-    accessory.context.deviceRefreshRate = this.deviceRefreshRate
+    this.deviceRefreshRate = device.refreshRate ?? this.platform.platformRefreshRate ?? 360
     const refreshRate = device.refreshRate ? 'Device Config' : this.platform.platformRefreshRate ? 'Platform Config' : 'Default'
     // updateRate
     this.deviceUpdateRate = device.updateRate ?? this.platform.platformUpdateRate ?? 5
-    accessory.context.deviceUpdateRate = this.deviceUpdateRate
     const updateRate = device.updateRate ? 'Device Config' : this.platform.platformUpdateRate ? 'Platform Config' : 'Default'
     // pushRate
-    this.devicePushRate = device.pushRate ?? this.platform.platformPushRate ?? 1
-    accessory.context.devicePushRate = this.devicePushRate
+    this.devicePushRate = device.pushRate ?? this.platform.platformPushRate ?? 0.1
     const pushRate = device.pushRate ? 'Device Config' : this.platform.platformPushRate ? 'Platform Config' : 'Default'
     this.debugLog(`Using ${refreshRate} refreshRate: ${this.deviceRefreshRate}, ${updateRate} updateRate: ${this.deviceUpdateRate}, ${pushRate} pushRate: ${this.devicePushRate}`)
     // maxRetries
@@ -111,9 +106,17 @@ export abstract class deviceBase {
     const maxRetries = device.maxRetries ? 'Device' : this.platform.platformMaxRetries ? 'Platform' : 'Default'
     this.debugLog(`Using ${maxRetries} Max Retries: ${this.deviceMaxRetries}`)
     // delayBetweenRetries
-    this.deviceDelayBetweenRetries = device.delayBetweenRetries ? (device.delayBetweenRetries * 1000) : this.platform.platformDelayBetweenRetries ? this.platform.platformDelayBetweenRetries : 3000
+    this.deviceDelayBetweenRetries = device.delayBetweenRetries ? (device.delayBetweenRetries * 1000) : this.platform.platformDelayBetweenRetries ?? 3000
     const delayBetweenRetries = device.delayBetweenRetries ? 'Device' : this.platform.platformDelayBetweenRetries ? 'Platform' : 'Default'
     this.debugLog(`Using ${delayBetweenRetries} Delay Between Retries: ${this.deviceDelayBetweenRetries}`)
+    // scanDuration
+    this.scanDuration = Math.max(device.scanDuration ?? 1, this.deviceUpdateRate > 1 ? this.deviceUpdateRate : 1)
+    if (this.BLE) {
+      this.debugLog(`Using ${device.scanDuration ? 'Device Config' : 'Default'} scanDuration: ${this.scanDuration}`)
+      if (device.scanDuration && this.deviceUpdateRate > device.scanDuration) {
+        this.warnLog('scanDuration is less than updateRate, overriding scanDuration with updateRate')
+      }
+    }
   }
 
   async retryBLE({ max, fn }: { max: number, fn: { (): any, (): Promise<any> } }): Promise<null> {
@@ -130,34 +133,6 @@ export abstract class deviceBase {
 
   maxRetryBLE(): number {
     return this.device.maxRetry !== undefined ? this.device.maxRetry : 5
-  }
-
-  async getDeviceScanDuration(accessory: PlatformAccessory, device: device & devicesConfig): Promise<void> {
-    this.scanDuration = device.scanDuration
-      ? (this.deviceUpdateRate > device.scanDuration) ? this.deviceUpdateRate : device.scanDuration ? (this.deviceUpdateRate > 1) ? this.deviceUpdateRate : 1 : this.deviceUpdateRate
-      : 1
-    if (device.scanDuration) {
-      if (this.deviceUpdateRate > device.scanDuration) {
-        this.scanDuration = this.deviceUpdateRate
-        if (this.BLE) {
-          this.warnLog('scanDuration is less than updateRate, overriding scanDuration with updateRate')
-        }
-      } else {
-        this.scanDuration = accessory.context.scanDuration = device.scanDuration
-      }
-      if (this.BLE) {
-        this.debugLog(`Using Device Config scanDuration: ${this.scanDuration}`)
-      }
-    } else {
-      if (this.deviceUpdateRate > 1) {
-        this.scanDuration = this.deviceUpdateRate
-      } else {
-        this.scanDuration = accessory.context.scanDuration = 1
-      }
-      if (this.BLE) {
-        this.debugLog(`Using Default scanDuration: ${this.scanDuration}`)
-      }
-    }
   }
 
   async getDeviceConfigSettings(device: device & devicesConfig): Promise<void> {

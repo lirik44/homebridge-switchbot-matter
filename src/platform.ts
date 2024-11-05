@@ -2656,24 +2656,26 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   }
 
   async getPlatformRateSettings() {
-    this.platformRefreshRate = this.config.options?.refreshRate ?? 120
-    if (this.platformRefreshRate < 5) {
-      this.platformRefreshRate = 5
-    }
-    const refreshRate = this.config.options?.refreshRate ? 'Using Platform Config refreshRate' : 'refreshRate Disabled by Default'
+    // RefreshRate
+    this.platformRefreshRate = this.config.options?.refreshRate ? this.config.options.refreshRate : undefined
+    const refreshRate = this.config.options?.refreshRate ? 'Using Platform Config refreshRate' : 'Platform Config refreshRate Not Set'
     await this.debugLog(`${refreshRate}: ${this.platformRefreshRate}`)
-    this.platformUpdateRate = this.config.options?.updateRate ? this.config.options.updateRate : 1
-    const updateRate = this.config.options?.updateRate ? 'Using Platform Config updateRate' : 'Using Default updateRate'
+    // UpdateRate
+    this.platformUpdateRate = this.config.options?.updateRate ? this.config.options.updateRate : undefined
+    const updateRate = this.config.options?.updateRate ? 'Using Platform Config updateRate' : 'Platform Config updateRate Not Set'
     await this.debugLog(`${updateRate}: ${this.platformUpdateRate}`)
-    this.platformPushRate = this.config.options?.pushRate ? this.config.options.pushRate : 0.1
-    const pushRate = this.config.options?.pushRate ? 'Using Platform Config pushRate' : 'Using Default pushRate'
+    // PushRate
+    this.platformPushRate = this.config.options?.pushRate ? this.config.options.pushRate : undefined
+    const pushRate = this.config.options?.pushRate ? 'Using Platform Config pushRate' : 'Platform Config pushRate Not Set'
     await this.debugLog(`${pushRate}: ${this.platformPushRate}`)
-    this.platformMaxRetries = this.config.options?.maxRetries ? this.config.options.maxRetries : 3
-    const maxRetries = this.config.options?.maxRetries ? 'Using Platform Config maxRetries' : 'Using Default maxRetries'
+    // MaxRetries
+    this.platformMaxRetries = this.config.options?.maxRetries ? this.config.options.maxRetries : undefined
+    const maxRetries = this.config.options?.maxRetries ? 'Using Platform Config maxRetries' : 'Platform Config maxRetries Not Set'
     await this.debugLog(`${maxRetries}: ${this.platformMaxRetries}`)
-    this.platformDelayBetweenRetries = this.config.options?.delayBetweenRetries ? this.config.options.delayBetweenRetries * 1000 : 3000
-    const delayBetweenRetries = this.config.options?.delayBetweenRetries ? 'Using Platform Config delayBetweenRetries' : 'Using Default delayBetweenRetries'
-    await this.debugLog(`${delayBetweenRetries}: ${this.platformDelayBetweenRetries / 1000}`)
+    // DelayBetweenRetries
+    this.platformDelayBetweenRetries = this.config.options?.delayBetweenRetries ? this.config.options.delayBetweenRetries : undefined
+    const delayBetweenRetries = this.config.options?.delayBetweenRetries ? 'Using Platform Config delayBetweenRetries' : 'Platform Config delayBetweenRetries Not Set'
+    await this.debugLog(`${delayBetweenRetries}: ${this.platformDelayBetweenRetries}`)
   }
 
   async getPlatformLogSettings() {
