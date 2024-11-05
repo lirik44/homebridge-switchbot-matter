@@ -106,9 +106,7 @@ export class WaterDetector extends deviceBase {
       accessory.context.LeakSensor = this.LeakSensor as object
 
       // Initialize LeakSensor Characteristic
-      this.LeakSensor!.Service.setCharacteristic(this.hap.Characteristic.Name, this.LeakSensor.Name).setCharacteristic(this.hap.Characteristic.StatusActive, true).getCharacteristic(this.hap.Characteristic.LeakDetected).onGet(() => {
-        return this.LeakSensor!.LeakDetected
-      })
+      this.LeakSensor.Service.setCharacteristic(this.hap.Characteristic.Name, this.LeakSensor.Name).setCharacteristic(this.hap.Characteristic.StatusActive, true)
     }
 
     // Retrieve initial values and updateHomekit
@@ -151,25 +149,26 @@ export class WaterDetector extends deviceBase {
     // LeakSensor
     if (!(this.device as waterDetectorConfig).hide_leak && this.LeakSensor?.Service) {
       // StatusActive
-      this.LeakSensor.StatusActive = this.serviceData.leak
+      this.LeakSensor.StatusActive = this.serviceData.tampered
       this.debugLog(`StatusActive: ${this.LeakSensor.StatusActive}`)
 
       // LeakDetected
       this.LeakSensor.LeakDetected = (this.device as waterDetectorConfig).dry
-        ? this.serviceData.tampered ? 1 : 0
-        : this.serviceData.tampered
+        ? !this.serviceData.leak ? this.hap.Characteristic.LeakDetected.LEAK_DETECTED : this.hap.Characteristic.LeakDetected.LEAK_NOT_DETECTED
+        : this.serviceData.leak ? this.hap.Characteristic.LeakDetected.LEAK_DETECTED : this.hap.Characteristic.LeakDetected.LEAK_NOT_DETECTED
       this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
     }
-    // BatteryLevel
-    this.Battery.BatteryLevel = this.serviceData.battery
-    this.debugLog(`BatteryLevel: ${this.Battery.BatteryLevel}`)
-    // StatusLowBattery
-    this.Battery.StatusLowBattery = this.serviceData.low_battery
-      ? this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
-      : this.Battery.BatteryLevel < 10
+    // Battery Info
+    if (this.serviceData.battery) {
+      // BatteryLevel
+      this.Battery.BatteryLevel = this.serviceData.battery
+      this.debugLog(`BatteryLevel: ${this.Battery.BatteryLevel}`)
+      // StatusLowBattery
+      this.Battery.StatusLowBattery = this.Battery.BatteryLevel < 10
         ? this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
         : this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL
-    this.debugLog(`StatusLowBattery: ${this.Battery.StatusLowBattery}`)
+      this.debugLog(`StatusLowBattery: ${this.Battery.StatusLowBattery}`)
+    }
   }
 
   async openAPIparseStatus(): Promise<void> {
@@ -183,13 +182,10 @@ export class WaterDetector extends deviceBase {
       this.debugLog(`StatusActive: ${this.LeakSensor.StatusActive}`)
 
       // LeakDetected
-      if ((this.device as waterDetectorConfig).dry) {
-        this.LeakSensor.LeakDetected = this.deviceStatus.status === 0 ? 1 : 0
-        this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
-      } else {
-        this.LeakSensor.LeakDetected = this.deviceStatus.status
-        this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
-      }
+      this.LeakSensor.LeakDetected = (this.device as waterDetectorConfig).dry
+        ? this.deviceStatus.status === 0 ? this.hap.Characteristic.LeakDetected.LEAK_DETECTED : this.hap.Characteristic.LeakDetected.LEAK_NOT_DETECTED
+        : this.deviceStatus.status === 1 ? this.hap.Characteristic.LeakDetected.LEAK_DETECTED : this.hap.Characteristic.LeakDetected.LEAK_NOT_DETECTED
+      this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
     }
 
     // BatteryLevel
@@ -229,13 +225,10 @@ export class WaterDetector extends deviceBase {
       this.debugLog(`StatusActive: ${this.LeakSensor.StatusActive}`)
 
       // LeakDetected
-      if ((this.device as waterDetectorConfig).dry) {
-        this.LeakSensor.LeakDetected = this.webhookContext.detectionState === 0 ? 1 : 0
-        this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
-      } else {
-        this.LeakSensor.LeakDetected = this.webhookContext.detectionState
-        this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
-      }
+      this.LeakSensor.LeakDetected = (this.device as waterDetectorConfig).dry
+        ? this.webhookContext.detectionState === 0 ? this.hap.Characteristic.LeakDetected.LEAK_DETECTED : this.hap.Characteristic.LeakDetected.LEAK_NOT_DETECTED
+        : this.webhookContext.detectionState === 1 ? this.hap.Characteristic.LeakDetected.LEAK_DETECTED : this.hap.Characteristic.LeakDetected.LEAK_NOT_DETECTED
+      this.debugLog(`LeakDetected: ${this.LeakSensor.LeakDetected}`)
     }
 
     // BatteryLevel
