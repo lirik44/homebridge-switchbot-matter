@@ -282,7 +282,7 @@ export class Bot extends deviceBase {
     this.debugLog(`${mode} Mode, On: ${this.On}`)
     this.accessory.context.On = this.On
     // Battery Info
-    if (this.serviceData.battery) {
+    if ('battery' in this.serviceData) {
       // BatteryLevel
       this.Battery.BatteryLevel = this.serviceData.battery
       this.debugLog(`BatteryLevel: ${this.Battery.BatteryLevel}`)
@@ -501,12 +501,12 @@ export class Bot extends deviceBase {
           switchBotBLE
             .discover({ model: this.device.bleModel, quick: true, id: this.device.bleMac })
             .then(async (device_list: SwitchbotDevice[]) => {
-              const deviceList = device_list as unknown as WoHand[]
+              const deviceList = device_list as WoHand[]
               this.infoLog(`On: ${this.On}`)
               return await deviceList[0].press()
             })
             .then(async () => {
-              this.successLog(`On: ${this.On} sent over SwitchBot BLE,  sent successfully`)
+              this.successLog(`On: ${this.On} sent over SwitchBot BLE, sent successfully`)
               await this.updateHomeKitCharacteristics()
               setTimeout(async () => {
                 this.On = false
@@ -523,7 +523,7 @@ export class Bot extends deviceBase {
           switchBotBLE
             .discover({ model: this.device.bleModel, quick: true, id: this.device.bleMac })
             .then(async (device_list: SwitchbotDevice[]) => {
-              const deviceList = device_list as unknown as WoHand[]
+              const deviceList = device_list as WoHand[]
               this.infoLog(`On: ${this.On}`)
               this.warnLog(`device_list: ${JSON.stringify(device_list)}`)
               return await this.retryBLE({
@@ -542,7 +542,7 @@ export class Bot extends deviceBase {
               })
             })
             .then(async () => {
-              this.successLog(`On: ${this.On} sent over SwitchBot BLE,  sent successfully`)
+              this.successLog(`On: ${this.On} sent over SwitchBot BLE, sent successfully`)
               await this.updateHomeKitCharacteristics()
             })
             .catch(async (e: any) => {

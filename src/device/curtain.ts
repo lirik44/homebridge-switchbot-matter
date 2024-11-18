@@ -379,12 +379,12 @@ export class Curtain extends deviceBase {
     this.debugLog('BLEparseStatus')
     this.debugLog(`(position, battery) = BLE:(${this.serviceData.position}, ${this.serviceData.battery}), current:(${this.WindowCovering.CurrentPosition}, ${this.Battery.BatteryLevel})`)
     // CurrentPosition
-    if (this.serviceData.position) {
+    if ('position' in this.serviceData) {
       this.WindowCovering.CurrentPosition = 100 - this.serviceData.position
       await this.getCurrentPostion()
     }
     // CurrentAmbientLightLevel
-    if (!(this.device as curtainConfig).hide_lightsensor && this.LightSensor?.Service && this.serviceData.lightLevel) {
+    if (!(this.device as curtainConfig).hide_lightsensor && this.LightSensor?.Service && 'lightLevel' in this.serviceData) {
       const set_minLux = (this.device as curtainConfig).set_minLux ?? 1
       const set_maxLux = (this.device as curtainConfig).set_maxLux ?? 6001
       const lightLevel = this.serviceData.lightLevel
@@ -392,7 +392,7 @@ export class Curtain extends deviceBase {
       this.debugLog(`LightLevel: ${this.serviceData.lightLevel}, CurrentAmbientLightLevel: ${this.LightSensor.CurrentAmbientLightLevel}`)
     }
     // Battery Info
-    if (this.serviceData.battery) {
+    if ('battery' in this.serviceData) {
       // BatteryLevel
       this.Battery.BatteryLevel = this.serviceData.battery
       this.debugLog(`BatteryLevel: ${this.Battery.BatteryLevel}`)
@@ -608,7 +608,7 @@ export class Curtain extends deviceBase {
           switchBotBLE
             .discover({ model: this.device.bleModel, quick: true, id: this.device.bleMac })
             .then(async (device_list: SwitchbotDevice[]) => {
-              const deviceList = device_list as unknown as WoCurtain[]
+              const deviceList = device_list as WoCurtain[]
               return await this.retryBLE({
                 max: this.maxRetryBLE(),
                 fn: async () => {
@@ -617,7 +617,7 @@ export class Curtain extends deviceBase {
               })
             })
             .then(async () => {
-              this.successLog(`TargetPostion: ${this.WindowCovering.TargetPosition} sent over SwitchBot BLE,  sent successfully`)
+              this.successLog(`TargetPostion: ${this.WindowCovering.TargetPosition} sent over SwitchBot BLE, sent successfully`)
               await this.updateHomeKitCharacteristics()
             })
             .catch(async (e: any) => {
