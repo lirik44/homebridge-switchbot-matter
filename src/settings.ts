@@ -220,6 +220,11 @@ export interface irBaseDeviceConfig extends irdevice {
   connectionType?: string
   hide_device?: boolean
   external?: boolean
+  refreshRate?: number
+  updateRate?: number
+  pushRate?: number
+  maxRetries?: number
+  delayBetweenRetries?: number
   firmware?: string
   deviceId: string
   logging?: string

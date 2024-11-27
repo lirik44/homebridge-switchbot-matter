@@ -10,16 +10,15 @@ import type { curtainConfig, devicesConfig } from '../settings.js'
 
 import { hostname } from 'node:os'
 
-import { debounceTime, interval, skipWhile, Subject, take, tap } from 'rxjs'
-
-import { formatDeviceIdAsMac, isCurtainDevice } from '../utils.js'
-import { deviceBase } from './device.js'
-
 /*
 * For Testing Locally:
 * import { SwitchBotBLEModel, SwitchBotBLEModelName } from '/Users/Shared/GitHub/OpenWonderLabs/node-switchbot/dist/index.js';
 */
 import { SwitchBotBLEModel, SwitchBotBLEModelName } from 'node-switchbot'
+import { debounceTime, interval, skipWhile, Subject, take, tap } from 'rxjs'
+
+import { formatDeviceIdAsMac, isCurtainDevice } from '../utils.js'
+import { deviceBase } from './device.js'
 
 export class Curtain extends deviceBase {
   // Services

@@ -8,16 +8,15 @@ import type { bodyChange, botServiceData, botStatus, botWebhookContext, device, 
 import type { SwitchBotPlatform } from '../platform.js'
 import type { botConfig, devicesConfig } from '../settings.js'
 
-import { debounceTime, interval, skipWhile, Subject, take, tap } from 'rxjs'
-
-import { formatDeviceIdAsMac } from '../utils.js'
-import { deviceBase } from './device.js'
-
 /*
 * For Testing Locally:
 * import { SwitchBotBLEModel, SwitchBotBLEModelName } from '/Users/Shared/GitHub/OpenWonderLabs/node-switchbot/dist/index.js';
 */
 import { SwitchBotBLEModel, SwitchBotBLEModelName } from 'node-switchbot'
+import { debounceTime, interval, skipWhile, Subject, take, tap } from 'rxjs'
+
+import { formatDeviceIdAsMac } from '../utils.js'
+import { deviceBase } from './device.js'
 
 /**
  * Platform Accessory
