@@ -6,15 +6,6 @@ import type { Server } from 'node:http'
 
 import type { API, DynamicPlatformPlugin, Logging, PlatformAccessory } from 'homebridge'
 import type { MqttClient } from 'mqtt'
-
-import type { blindTiltConfig, curtainConfig, devicesConfig, irDevicesConfig, options, SwitchBotPlatformConfig } from './settings.js'
-
-import { readFileSync } from 'node:fs'
-import process, { argv } from 'node:process'
-
-import asyncmqtt from 'async-mqtt'
-import fakegato from 'fakegato-history'
-import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes'
 /*
 * For Testing Locally:
 * import type { blindTilt, curtain, curtain3, device, irdevice } from '/Users/Shared/GitHub/OpenWonderLabs/node-switchbot/dist/index.js';
@@ -22,6 +13,15 @@ import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes'
 */
 import type { blindTilt, curtain, curtain3, device, deviceStatus, deviceStatusRequest, irdevice } from 'node-switchbot'
 
+import type { blindTiltConfig, curtainConfig, devicesConfig, irDevicesConfig, options, SwitchBotPlatformConfig } from './settings.js'
+
+import { readFileSync } from 'node:fs'
+import { hostname } from 'node:os'
+import process, { argv } from 'node:process'
+
+import asyncmqtt from 'async-mqtt'
+import fakegato from 'fakegato-history'
+import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes'
 import { LogLevel, SwitchBotBLE, SwitchBotModel, SwitchBotOpenAPI } from 'node-switchbot'
 import { queueScheduler } from 'rxjs'
 
@@ -54,7 +54,7 @@ import { TV } from './irdevice/tv.js'
 import { VacuumCleaner } from './irdevice/vacuumcleaner.js'
 import { WaterHeater } from './irdevice/waterheater.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
-import { formatDeviceIdAsMac, isBlindTiltDevice, isCurtainDevice, sleep } from './utils.js'
+import { formatDeviceIdAsMac, isBlindTiltDevice, isCurtainDevice, safeStringify, sleep } from './utils.js'
 
 /**
  * HomebridgePlatform
@@ -139,7 +139,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 
     // SwitchBot OpenAPI
     if (this.config.credentials?.token && this.config.credentials?.secret) {
-      this.switchBotAPI = new SwitchBotOpenAPI(this.config.credentials.token, this.config.credentials.secret)
+      this.switchBotAPI = new SwitchBotOpenAPI(this.config.credentials.token, this.config.credentials.secret, this.config.options?.hostname)
     } else {
       this.debugErrorLog('Missing SwitchBot API credentials (token or secret).')
     }
@@ -583,6 +583,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   private async createDevice(device: device & devicesConfig) {
     const deviceTypeHandlers: { [key: string]: (device: device & devicesConfig) => Promise<void> } = {
       'Humidifier': this.createHumidifier.bind(this),
+      'Humidifier2': this.createHumidifier.bind(this),
       'Hub 2': this.createHub2.bind(this),
       'Bot': this.createBot.bind(this),
       'Meter': this.createMeter.bind(this),
@@ -685,7 +686,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         existingAccessory.context.device = device
         existingAccessory.context.deviceId = device.deviceId
         existingAccessory.context.deviceType = device.deviceType
-        existingAccessory.context.model = SwitchBotModel.Humidifier
+        existingAccessory.context.model = device.deviceType === 'Humidifier2' ? SwitchBotModel.Humidifier2 : SwitchBotModel.Humidifier
         existingAccessory.displayName = device.configDeviceName
           ? await this.validateAndCleanDisplayName(device.configDeviceName, 'configDeviceName', device.configDeviceName)
           : await this.validateAndCleanDisplayName(device.deviceName, 'deviceName', device.deviceName)
@@ -711,7 +712,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
       accessory.context.device = device
       accessory.context.deviceId = device.deviceId
       accessory.context.deviceType = device.deviceType
-      accessory.context.model = SwitchBotModel.Humidifier
+      accessory.context.model = device.deviceType === 'Humidifier2' ? SwitchBotModel.Humidifier2 : SwitchBotModel.Humidifier
       accessory.displayName = device.configDeviceName
         ? await this.validateAndCleanDisplayName(device.configDeviceName, 'configDeviceName', device.configDeviceName)
         : await this.validateAndCleanDisplayName(device.deviceName, 'deviceName', device.deviceName)
@@ -2630,7 +2631,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   async connectBLE(accessory: PlatformAccessory, device: device & devicesConfig): Promise<any> {
     try {
       queueScheduler.schedule(async () => this.switchBotBLE)
-      this.debugLog(`${device.deviceType}: ${accessory.displayName} 'node-switchbot' found: ${this.switchBotBLE}`)
+      this.debugLog(`${device.deviceType}: ${accessory.displayName} 'node-switchbot' found: ${safeStringify(this.switchBotBLE)}`)
       return this.switchBotBLE
     } catch (e: any) {
       this.errorLog(`${device.deviceType}: ${accessory.displayName} 'node-switchbot' not found, Error: ${e.message ?? e}`)

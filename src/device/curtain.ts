@@ -844,7 +844,6 @@ export class Curtain extends deviceBase {
       this.hasLoggedStandby = false
       this.infoLog('Checking Status ...')
       this.curtainMoving = true
-      await this.setMinMax()
       if (this.WindowCovering.TargetPosition > this.WindowCovering.CurrentPosition) {
         this.debugLog(`Closing, CurrentPosition: ${this.WindowCovering.CurrentPosition}`)
         this.WindowCovering.PositionState = this.hap.Characteristic.PositionState.INCREASING
@@ -877,13 +876,13 @@ export class Curtain extends deviceBase {
 
   async setMinMax(): Promise<void> {
     if ((this.device as curtainConfig).set_min) {
-      if (Number(this.WindowCovering.CurrentPosition) <= (this.device as curtainConfig).set_min!) {
-        this.WindowCovering.CurrentPosition = 0
+      if (Number(this.WindowCovering.CurrentPosition) >= (this.device as curtainConfig).set_min!) {
+        this.WindowCovering.CurrentPosition = 100
       }
     }
     if ((this.device as curtainConfig).set_max) {
-      if (Number(this.WindowCovering.CurrentPosition) >= (this.device as curtainConfig).set_max!) {
-        this.WindowCovering.CurrentPosition = 100
+      if (Number(this.WindowCovering.CurrentPosition) <= (this.device as curtainConfig).set_max!) {
+        this.WindowCovering.CurrentPosition = 0
       }
     }
     if (this.device.history) {

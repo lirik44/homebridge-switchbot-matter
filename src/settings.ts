@@ -43,6 +43,7 @@ export interface options {
   discoverBLE?: boolean
   disableLogsforBLE?: boolean
   disableLogsforOpenAPI?: boolean
+  hostname?: string
   webhookURL?: string
   maxRetries?: number
   delayBetweenRetries?: number
@@ -118,7 +119,7 @@ export interface indoorOutdoorSensorConfig extends BaseDeviceConfig {
 };
 
 export interface humidifierConfig extends BaseDeviceConfig {
-  configDeviceType: 'Humidifier'
+  configDeviceType: 'Humidifier' | 'Humidifier2'
   hide_temperature?: boolean
   convertUnitTo?: string
   set_minStep?: number
