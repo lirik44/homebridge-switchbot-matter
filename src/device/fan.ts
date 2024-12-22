@@ -240,7 +240,7 @@ export class Fan extends deviceBase {
 
     // Firmware Version
     if (this.deviceStatus.version) {
-      const version = this.deviceStatus.version.toString()
+      const version = this.deviceStatus.version as string
       this.debugLog(`Firmware Version: ${version.replace(/^V|-.*$/g, '')}`)
       const deviceVersion = version.replace(/^V|-.*$/g, '') ?? '0.0.0'
       this.accessory
@@ -380,7 +380,6 @@ export class Fan extends deviceBase {
         await this.updateHomeKitCharacteristics()
       } else {
         this.debugWarnLog(`statusCode: ${deviceStatus.statusCode}, deviceStatus: ${JSON.stringify(deviceStatus)}`)
-        this.debugWarnLog(deviceStatus)
       }
     } catch (e: any) {
       await this.apiError(e)
