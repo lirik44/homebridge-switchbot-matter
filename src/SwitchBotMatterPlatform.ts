@@ -67,8 +67,11 @@ export class SwitchBotMatterPlatform {
 
     // Create/shared SwitchBot client and attach to config so child devices reuse it.
     try {
-      const client = new SwitchBotClient(this.config)
-      void client.init();
+      // A client passed in is shared with the other platform: one radio, one cloud session.
+      const client = (config as any)?._client ?? new SwitchBotClient(this.config)
+      if (!(config as any)?._client) {
+        void client.init()
+      }
       (this.config as any)._client = client
     } catch (e) {
       this.log.debug('Failed to create shared SwitchBot client', e)

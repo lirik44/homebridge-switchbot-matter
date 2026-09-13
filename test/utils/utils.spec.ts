@@ -29,13 +29,38 @@ describe('utils', () => {
     expect(result).not.toBe(input)
   })
 
-  it('createPlatformProxy instantiates MatterPlatform if available and enabled', () => {
+  it('createPlatformProxy publishes over HAP and Matter when Matter is available', () => {
+    // HomeKit speaks HAP and everything else speaks Matter, so a home usually wants both.
+    const HAP = vi.fn(function (this: any) {
+      this.configureAccessory = vi.fn()
+      this.config = { _client: 'shared-client' }
+    })
+    const Matter = vi.fn(function (this: any) {
+      this.configureMatterAccessory = vi.fn()
+    })
+    const api = { isMatterAvailable: () => true, isMatterEnabled: () => true }
+    const Proxy = createPlatformProxy(HAP, Matter)
+
+    const platform: any = new Proxy('log', { enableMatter: true } as any, api)
+
+    expect(HAP).toHaveBeenCalled()
+    expect(Matter).toHaveBeenCalled()
+    // One client between them: two would put two BLE scanners on the same radio.
+    expect((Matter.mock.calls[0] as any[])[1]._client).toBe('shared-client')
+    platform.configureAccessory('hap-accessory')
+    platform.configureMatterAccessory('matter-accessory')
+    expect(platform.hap.configureAccessory).toHaveBeenCalledWith('hap-accessory')
+    expect(platform.matter.configureMatterAccessory).toHaveBeenCalledWith('matter-accessory')
+  })
+
+  it('createPlatformProxy publishes over Matter alone when matterOnly is set', () => {
     const HAP = vi.fn()
     const Matter = vi.fn()
     const api = { isMatterAvailable: () => true, isMatterEnabled: () => true }
-    const config = { enableMatter: true, preferMatter: true }
     const Proxy = createPlatformProxy(HAP, Matter)
-    new Proxy('log', config, api)
+
+    new Proxy('log', { enableMatter: true, matterOnly: true } as any, api)
+
     expect(Matter).toHaveBeenCalled()
     expect(HAP).not.toHaveBeenCalled()
   })

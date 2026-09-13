@@ -1238,29 +1238,60 @@ export function normalizeConfig(raw?: PlatformConfig): SwitchBotPluginConfig {
  */
 export function createPlatformProxy(HAPPlatform: any, MatterPlatform: any): any {
   return class SwitchBotPlatformProxy {
-    /** The instantiated platform implementation (HAP or Matter) */
-    private impl: any
     /**
-     * Constructs the proxy and instantiates the correct platform implementation.
+     * Runs the platform over HAP, over Matter, or over both.
+     *
+     * The two protocols reach different places and a home usually wants both: HomeKit speaks HAP,
+     * while Matter is how everything else - Alexa, SmartThings, Aqara - sees the devices. So Matter
+     * is published *alongside* HAP rather than instead of it, which is what `enableMatter` now
+     * means. `matterOnly` keeps the older behaviour for anyone who wants nothing on HAP.
+     *
+     * Both platforms share one SwitchBot client. Two would mean two BLE scanners competing for the
+     * same radio and two lots of cloud polling for the same devices.
+     *
      * @param log Logger instance
      * @param config Platform config
      * @param api Homebridge API instance
-     * @returns The instantiated platform implementation
+     * @returns The platform implementation, or a facade over both of them
      */
     constructor(log: any, config: PlatformConfig, api: any) {
       const cfg = normalizeConfig(config)
-      const preferMatter = cfg.preferMatter ?? true
       const enableMatter = cfg.enableMatter ?? true
+      const matterOnly = cfg.matterOnly === true
       const matterAvailable = !!(api?.isMatterAvailable?.() && api?.isMatterEnabled?.())
+      const useMatter = enableMatter && matterAvailable && !!MatterPlatform
 
-      if (enableMatter && preferMatter && MatterPlatform && matterAvailable) {
-        this.impl = new MatterPlatform(log, cfg, api)
-        return this.impl
+      if (!useMatter) {
+        if (enableMatter && !matterAvailable) {
+          log?.info?.('Matter is not enabled for this bridge; publishing over HAP only')
+        }
+        return new HAPPlatform(log, cfg, api)
       }
 
-      // Fallback to HAP
-      this.impl = new HAPPlatform(log, cfg, api)
-      return this.impl
+      if (matterOnly) {
+        log?.info?.('Publishing over Matter only (matterOnly is set)')
+        return new MatterPlatform(log, cfg, api)
+      }
+
+      log?.info?.('Publishing over HAP and Matter')
+      const hap = new HAPPlatform(log, cfg, api)
+      // The HAP platform builds the shared client; hand it to the Matter platform rather than
+      // letting it open a second one.
+      const matterCfg = { ...cfg, _client: (hap as any)?.config?._client }
+      const matter = new MatterPlatform(log, matterCfg, api)
+
+      return {
+        hap,
+        matter,
+        /** Homebridge restores HAP accessories through here. */
+        configureAccessory: (accessory: any) => hap.configureAccessory?.(accessory),
+        /** ... and Matter ones through here. */
+        configureMatterAccessory: (accessory: any) => matter.configureMatterAccessory?.(accessory) ?? matter.configureAccessory?.(accessory),
+        shutdown: () => {
+          hap.shutdown?.()
+          matter.shutdown?.()
+        },
+      }
     }
   }
 }
