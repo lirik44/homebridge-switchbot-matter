@@ -197,6 +197,54 @@
             }
           }
         }
+      },
+      "irdevices": {
+        "title": "Infrared Remotes",
+        "description": "Remotes taught to a SwitchBot hub. They are cloud-only: the hub blasts a code and nothing answers, so their state is what the plugin last sent.",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "configDeviceName": {
+              "title": "Name",
+              "type": "string",
+              "description": "The name the remote gets in your controller."
+            },
+            "deviceId": {
+              "title": "Device ID",
+              "type": "string",
+              "required": true,
+              "description": "The remote id, as listed under infraredRemoteList in the SwitchBot API."
+            },
+            "configRemoteType": {
+              "title": "Remote Type",
+              "type": "string",
+              "required": true,
+              "default": "DIY Light",
+              "oneOf": [
+                {
+                  "title": "Light",
+                  "enum": [
+                    "Light"
+                  ]
+                },
+                {
+                  "title": "DIY Light",
+                  "enum": [
+                    "DIY Light"
+                  ]
+                }
+              ],
+              "description": "Only light remotes are supported so far: they are exposed as a lightbulb with on and off."
+            },
+            "hide_device": {
+              "title": "Hide Remote",
+              "type": "boolean",
+              "default": false,
+              "description": "Leave this remote out without deleting its settings."
+            }
+          }
+        }
       }
     },
     "openApiRefreshRate": {

@@ -33,7 +33,9 @@ import {
   WoSweeperMiniDevice,
   WoSweeperMiniProDevice,
 } from './devices/genericDevice.js'
+import { IRLightDevice } from './devices/irDevice.js'
 import { SwitchBotClient } from './switchbotClient.js'
+import { isInfraredType } from './utils.js'
 
 export interface DeviceOptions {
   id: string
@@ -43,6 +45,9 @@ export interface DeviceOptions {
 }
 
 const DEVICE_CLASS_MAP: Record<string, any> = {
+  // Infrared remotes. Cloud-only, stateless, and unrelated to the SwitchBot device of the same
+  // name: an `ir light` is a lamp the hub blasts codes at, a `light` is a SwitchBot bulb.
+  'ir light': IRLightDevice,
   // Primary device type keys (lowercase, simplified)
   'bot': BotDevice,
   'curtain': CurtainDevice,
@@ -177,20 +182,23 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
   const device = new DeviceCtor(deviceOpts, mergedCfg)
   await device.init()
 
-  // Attach a simple getState delegator to the client where appropriate
+  // Attach a simple getState delegator to the client where appropriate. An IR remote is not in
+  // discovery and has nothing to report, so it keeps the state it remembers instead.
   const originalGetState = device.getState.bind(device)
-  device.getState = async () => {
-    try {
-      // Prefer client-backed getDevice when available
-      const dev = await client.getDevice(opts.id)
-      if (dev) {
-        return dev
+  device.getState = isInfraredType(opts.type)
+    ? originalGetState
+    : async () => {
+      try {
+        // Prefer client-backed getDevice when available
+        const dev = await client.getDevice(opts.id)
+        if (dev) {
+          return dev
+        }
+      } catch (e) {
+        // ignore and fallback to device implementation
       }
-    } catch (e) {
-      // ignore and fallback to device implementation
+      return originalGetState()
     }
-    return originalGetState()
-  }
 
   // Provide accessory factory based on platform selection
   return {

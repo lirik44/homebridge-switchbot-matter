@@ -1,5 +1,6 @@
-import type { SwitchBotPluginConfig } from './settings.js'
 import type { Logger, PlatformConfig } from 'homebridge'
+
+import type { SwitchBotPluginConfig } from './settings.js'
 /**
  * Indicates which device types should prefer Matter if available.
  * Based on HAP service mappings: device implementations use specific HomeKit services
@@ -21,6 +22,8 @@ import type { Logger, PlatformConfig } from 'homebridge'
  */
 
 export const DEVICE_MATTER_SUPPORTED: Record<string, boolean> = {
+  // Infrared remotes
+  'ir light': true, // Lightbulb → OnOff
   // Core devices
   'bot': true, // Switch → OnOff
   'curtain': true, // WindowCovering → WindowCovering
@@ -84,9 +87,12 @@ export const DEVICE_MATTER_SUPPORTED: Record<string, boolean> = {
  * DEVICE_MATTER_CLUSTERS['bot'] // { onOff: { onOff: false } }
  */
 export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
+  // An IR remote for a light is on/off and nothing else: the hub blasts a code and no appliance
+  // reports back, so there is no brightness or colour to advertise.
+  'ir light': { onOff: { onOff: false } },
   // Core devices - aligned with HAP service implementations
-  bot: { onOff: { onOff: false } }, // Switch → OnOff
-  vacuum: {
+  'bot': { onOff: { onOff: false } }, // Switch → OnOff
+  'vacuum': {
     rvcRunMode: {
       supportedModes: [
         { label: 'Idle', mode: 0, modeTags: [{ value: 16384 }] },
@@ -113,7 +119,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       operationalState: 66,
     },
   }, // Switch in HAP, RobotVacuumCleaner in Matter
-  curtain: {
+  'curtain': {
     windowCovering: {
       currentPositionLiftPercent100ths: 0,
       targetPositionLiftPercent100ths: 0,
@@ -134,7 +140,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       },
     },
   }, // WindowCovering → WindowCovering (includes curtain3, rollershade variants via normalization)
-  blindtilt: {
+  'blindtilt': {
     windowCovering: {
       currentPositionLiftPercent100ths: 0,
       targetPositionLiftPercent100ths: 0,
@@ -157,7 +163,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       },
     },
   }, // WindowCovering with tilt → WindowCovering
-  fan: {
+  'fan': {
     onOff: { onOff: false },
     fanControl: {
       fanMode: 0,
@@ -167,7 +173,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       speedMax: 100,
     },
   }, // Fan → OnOff + FanControl
-  light: {
+  'light': {
     onOff: { onOff: false },
     levelControl: {
       currentLevel: 0,
@@ -175,7 +181,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       maxLevel: 254,
     },
   }, // Lightbulb → OnOff + LevelControl
-  lightstrip: {
+  'lightstrip': {
     onOff: { onOff: false },
     levelControl: {
       currentLevel: 0,
@@ -186,7 +192,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       colorMode: 0,
     },
   }, // Lightbulb with color → OnOff + LevelControl + ColorControl
-  lock: {
+  'lock': {
     doorLock: {
       lockState: 0,
       lockType: 0,
@@ -194,18 +200,18 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       operatingMode: 0,
     },
   }, // LockMechanism → DoorLock
-  motion: {
+  'motion': {
     occupancySensing: {
       occupancy: 0,
       occupancySensorType: 0,
     },
   }, // MotionSensor → OccupancySensing
-  contact: {
+  'contact': {
     booleanState: {
       stateValue: false,
     },
   }, // ContactSensor → BooleanState
-  humidifier: {
+  'humidifier': {
     onOff: { onOff: false },
     fanControl: {
       fanMode: 0,
@@ -217,7 +223,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       maxMeasuredValue: 100,
     },
   }, // HumidifierDehumidifier → OnOff + FanControl + RelativeHumidityMeasurement
-  temperature: {
+  'temperature': {
     temperatureMeasurement: {
       measuredValue: 0,
       minMeasuredValue: -27315,
@@ -226,8 +232,8 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
   }, // TemperatureSensor → TemperatureMeasurement
 
   // Switch/Outlet devices
-  relay: { onOff: { onOff: false } }, // Switch → OnOff
-  plug: {
+  'relay': { onOff: { onOff: false } }, // Switch → OnOff
+  'plug': {
     onOff: { onOff: false },
     electricalMeasurement: {
       activePower: 0,
@@ -237,7 +243,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
   }, // Outlet → OnOff + ElectricalMeasurement (for PM models)
 
   // Sensors
-  meter: {
+  'meter': {
     temperatureMeasurement: {
       measuredValue: 0,
       minMeasuredValue: -27315,
@@ -249,17 +255,92 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       maxMeasuredValue: 100,
     },
   }, // TemperatureSensor + HumiditySensor → TemperatureMeasurement + RelativeHumidityMeasurement
-  waterdetector: {
+  'waterdetector': {
     booleanState: {
       stateValue: false,
     },
   }, // LeakSensor → BooleanState
 }
 
+/**
+ * Whether a configured type is an infrared remote rather than a SwitchBot device.
+ *
+ * @param typeValue The device type from the configuration.
+ * @returns True when the type is one of the infrared remote types.
+ */
+export function isInfraredType(typeValue: string | undefined | null): boolean {
+  return normalizeTypeForMatter(typeValue).startsWith('ir ')
+}
+
+/**
+ * Presses a button on an infrared remote, for the Matter handlers.
+ *
+ * @param log The platform logger.
+ * @param client The SwitchBot client.
+ * @param deviceId The remote's device id.
+ * @param command The command to send.
+ * @returns The outcome, in the shape Matter handlers report.
+ */
+async function sendIRCommand(log: Logger, client: any, deviceId: string, command: string): Promise<any> {
+  if (!client || typeof client.sendIRCommand !== 'function') {
+    log.warn(`[${deviceId}] No SwitchBot client available for the IR remote`)
+    return { success: false }
+  }
+  try {
+    const result = await client.sendIRCommand(deviceId, command)
+    log.debug(`[${deviceId}] Sent ${command} to the IR remote`)
+    return { success: true, result }
+  } catch (e) {
+    log.error(`[${deviceId}] Failed to send ${command} to the IR remote:`, e)
+    return { success: false, error: e }
+  }
+}
+
+/**
+ * Collects the devices to expose, from both the SwitchBot devices and the infrared remotes.
+ *
+ * The two live under separate keys because the SwitchBot API lists them separately and treats
+ * them differently: a device is talked to, a remote is blasted at. Both end up here in the one
+ * shape the platforms work with, with the devices the user hid left out.
+ *
+ * @param config The platform configuration.
+ * @returns The configured devices, normalised.
+ */
+export function collectConfiguredDevices(config: any): Array<{ id: string, name?: string, type: string, encryptionKey?: string, keyId?: string, _raw: any }> {
+  const entries: Array<{ raw: any, type: string }> = []
+
+  for (const raw of config?.devices ?? []) {
+    entries.push({ raw, type: raw.configDeviceType ?? raw.type ?? raw.deviceType ?? 'unknown' })
+  }
+  for (const raw of config?.irdevices ?? []) {
+    // `configRemoteType` is what the SwitchBot app calls the remote, e.g. "DIY Light".
+    entries.push({ raw, type: raw.configRemoteType ?? raw.remoteType ?? raw.type ?? 'unknown' })
+  }
+
+  return entries
+    .filter(({ raw }) => raw?.hide_device !== true)
+    .map(({ raw, type }) => ({
+      id: raw.deviceId ?? raw.id,
+      name: raw.configDeviceName ?? raw.name,
+      type,
+      encryptionKey: raw.encryptionKey,
+      keyId: raw.keyId,
+      _raw: raw,
+    }))
+    .filter(device => !!device.id)
+}
+
 export function createMatterHandlers(log: Logger, deviceId: string, type: string, client: any): any {
   const lowerType = type.toLowerCase()
 
   switch (lowerType) {
+    case 'ir light':
+      return {
+        onOff: {
+          on: async () => sendIRCommand(log, client, deviceId, 'turnOn'),
+          off: async () => sendIRCommand(log, client, deviceId, 'turnOff'),
+        },
+      }
     case 'vacuum':
       return {
         rvcRunMode: {
@@ -968,22 +1049,23 @@ export function createMatterHandlers(log: Logger, deviceId: string, type: string
  * @returns The resolved Matter device type object
  */
 const DEVICE_MATTER_DEVICE_TYPE_KEYS: Record<string, string> = {
-  bot: 'OnOffSwitch',
-  vacuum: 'RoboticVacuumCleaner',
-  curtain: 'WindowCovering',
-  blindtilt: 'WindowCovering',
-  fan: 'Fan',
-  light: 'DimmableLight',
-  lightstrip: 'ExtendedColorLight',
-  lock: 'DoorLock',
-  motion: 'MotionSensor',
-  contact: 'ContactSensor',
-  humidifier: 'Fan',
-  temperature: 'TemperatureSensor',
-  relay: 'OnOffSwitch',
-  plug: 'OnOffOutlet',
-  meter: 'TemperatureSensor',
-  waterdetector: 'LeakSensor',
+  'ir light': 'OnOffLight',
+  'bot': 'OnOffSwitch',
+  'vacuum': 'RoboticVacuumCleaner',
+  'curtain': 'WindowCovering',
+  'blindtilt': 'WindowCovering',
+  'fan': 'Fan',
+  'light': 'DimmableLight',
+  'lightstrip': 'ExtendedColorLight',
+  'lock': 'DoorLock',
+  'motion': 'MotionSensor',
+  'contact': 'ContactSensor',
+  'humidifier': 'Fan',
+  'temperature': 'TemperatureSensor',
+  'relay': 'OnOffSwitch',
+  'plug': 'OnOffOutlet',
+  'meter': 'TemperatureSensor',
+  'waterdetector': 'LeakSensor',
 }
 
 export function resolveMatterDeviceType(matterApi: any, type: string, createdDeviceType?: any, clusters?: any): any {
@@ -1053,6 +1135,12 @@ export function normalizeTypeForMatter(typeValue: string | undefined | null): st
   const raw = String(typeValue || '').trim().toLowerCase()
   if (!raw) {
     return 'unknown'
+  }
+
+  // Infrared remote types, as the SwitchBot app names them. Kept distinct from the SwitchBot
+  // devices of the same name: these are codes the hub blasts, not devices it talks to.
+  if (['ir light', 'diy light', 'light (ir)'].includes(raw)) {
+    return 'ir light'
   }
 
   // Vacuum variants

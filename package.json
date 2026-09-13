@@ -1,9 +1,9 @@
 {
-  "name": "@switchbot/homebridge-switchbot",
-  "displayName": "SwitchBot",
+  "name": "@lirik44/homebridge-switchbot",
+  "displayName": "SwitchBot (lirik44)",
   "type": "module",
   "version": "5.0.4",
-  "description": "The SwitchBot plugin allows you to access your SwitchBot device(s) from HomeKit.",
+  "description": "The SwitchBot plugin allows you to access your SwitchBot device(s) from HomeKit. Fork with infrared remote support restored.",
   "author": "SwitchBot <support@wondertechlabs.com> (https://github.com/SwitchBot)",
   "contributors": [
     {
@@ -22,13 +22,13 @@
       "url": "https://github.com/sponsors/donavanbecker"
     }
   ],
-  "homepage": "https://github.com/OpenWonderLabs/homebridge-switchbot#readme",
+  "homepage": "https://github.com/lirik44/homebridge-switchbot#readme",
   "repository": {
     "type": "git",
-    "url": "git://github.com/OpenWonderLabs/homebridge-switchbot.git"
+    "url": "git+https://github.com/lirik44/homebridge-switchbot.git"
   },
   "bugs": {
-    "url": "https://github.com/OpenWonderLabs/homebridge-switchbot/issues"
+    "url": "https://github.com/lirik44/homebridge-switchbot/issues"
   },
   "keywords": [
     "homebridge-plugin",
@@ -77,6 +77,7 @@
     "watch:files": "nodemon",
     "plugin-ui": "mkdir -p ./dist/homebridge-ui/public && if [ -d ./src/homebridge-ui/public ]; then rsync -a ./src/homebridge-ui/public/ ./dist/homebridge-ui/public/; fi && node scripts/build-ui.js",
     "build": "npm run sync:device-types && npm run clean && tsc && npm run plugin-ui",
+    "prepare": "npm run build",
     "build:ui": "tsc --project tsconfig.ui.json",
     "prepublishOnly": "npm run lint && npm run build && npm run build:ui && npm run plugin-ui && npm run docs && npm run docs:lint",
     "postpublish": "npm run clean && npm ci",

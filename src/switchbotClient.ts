@@ -9,6 +9,7 @@ export interface ISwitchBotClient {
   getDevice: (id: string) => Promise<any>
   getDevices: () => Promise<any[]>
   setDeviceState: (id: string, body: any) => Promise<any>
+  sendIRCommand: (id: string, command: string, parameter?: string) => Promise<any>
   destroy: () => Promise<void>
 }
 
@@ -159,6 +160,35 @@ export class SwitchBotClient implements ISwitchBotClient {
 
       this.pendingWrites.set(id, { timer, body, resolvers })
     })
+  }
+
+  /**
+   * Press a button on an infrared remote.
+   *
+   * IR remotes are not devices the hub talks to - they are codes it blasts - so they never show
+   * up in discovery and `setDeviceState` cannot be used for them: it resolves the device first
+   * and would fail with `device_not_found`. The command goes straight to the cloud instead, which
+   * is the only route the SwitchBot API offers for infrared.
+   *
+   * @param id The remote's device id, as listed under `infraredRemoteList` in the SwitchBot API.
+   * @param command The command to send, e.g. `turnOn` or `turnOff`.
+   * @param parameter The command parameter; `default` for the standard buttons.
+   */
+  async sendIRCommand(id: string, command: string, parameter: string = 'default'): Promise<any> {
+    if (!this.client) {
+      throw new SwitchbotOperationError('No SwitchBot client available for IR command', 'no_client')
+    }
+
+    const api = typeof (this.client as any).getAPIClient === 'function' ? (this.client as any).getAPIClient() : undefined
+    if (!api || typeof api.sendCommand !== 'function') {
+      throw new SwitchbotOperationError(
+        'Infrared remotes are only reachable through the SwitchBot cloud: set openApiToken and openApiSecret',
+        'no_openapi',
+      )
+    }
+
+    this.logger?.debug?.(`Sending IR command ${command} to ${id}`)
+    return api.sendCommand(id, command, parameter)
   }
 
   private async _doSetDeviceState(id: string, body: any): Promise<any> {
