@@ -76,6 +76,16 @@ describe('a client with no Bluetooth', () => {
     })
   })
 
+  it('words opening a curtain the way the cloud does', async () => {
+    const fetchMock = cloudAnswers([DEVICE_LIST, {}])
+    const sb = client()
+    await sb.init()
+
+    // `open` and `close` were the Bluetooth library's names for these.
+    await sb.setDeviceState('D1', { command: 'open', parameter: 'default', commandType: 'command' })
+    expect(JSON.parse((fetchMock.mock.calls[1] as any)[1].body).command).toBe('turnOn')
+  })
+
   it('presses an infrared remote', async () => {
     const fetchMock = cloudAnswers([{}])
     const sb = client()

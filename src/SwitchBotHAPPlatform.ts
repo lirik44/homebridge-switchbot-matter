@@ -461,7 +461,8 @@ export class SwitchBotHAPPlatform {
 
         this.pushed.set(key, value)
         characteristic.updateValue(value)
-        this.log.debug(`[HAP] ${uuid}: ${name} = ${value}`)
+        // A change is an event, not a poll: worth a line without turning on debug logging.
+        this.log.info(`[HAP] ${uuid}: ${name} = ${value}`)
       } catch (e) {
         this.log.debug(`[HAP] Could not read ${name} of ${uuid}:`, (e as Error)?.message)
       }

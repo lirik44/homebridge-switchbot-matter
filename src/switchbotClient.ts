@@ -305,16 +305,24 @@ export class SwitchBotClient implements ISwitchBotClient {
 
     const device = await this.getDevice(id)
     const deviceType = String(device?.deviceType ?? '').toLowerCase()
+    const isCovering = deviceType.includes('curtain') || deviceType.includes('blind') || deviceType.includes('shade')
     let parameter = body?.parameter ?? 'default'
+    let cloudCommand = command
+
+    // Opening and closing a covering are its `turnOn` and `turnOff` in the cloud API; `open` and
+    // `close` were the Bluetooth library's names for them.
+    if (isCovering && (command === 'open' || command === 'close')) {
+      cloudCommand = command === 'open' ? 'turnOn' : 'turnOff'
+    }
 
     // A curtain takes its position as index, mode and percentage together; everywhere else in
     // this plugin a position is just the percentage.
-    if (command === 'setPosition' && !String(parameter).includes(',') && (deviceType.includes('curtain') || deviceType.includes('blind'))) {
+    if (command === 'setPosition' && !String(parameter).includes(',') && isCovering) {
       parameter = `0,ff,${parameter}`
     }
 
-    this.logger?.debug?.(`[${id}] Sending ${command} (${parameter}) over the cloud`)
-    return this.cloud.sendCommand(id, command, parameter, body?.commandType ?? 'command')
+    this.logger?.debug?.(`[${id}] Sending ${cloudCommand} (${parameter}) over the cloud`)
+    return this.cloud.sendCommand(id, cloudCommand, parameter, body?.commandType ?? 'command')
   }
 
   private async _doSetDeviceState(id: string, body: any): Promise<any> {
