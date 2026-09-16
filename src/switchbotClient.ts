@@ -1,5 +1,6 @@
-import type { SwitchBotPluginConfig } from './settings.js'
 import type { SwitchBot } from 'node-switchbot'
+
+import type { SwitchBotPluginConfig } from './settings.js'
 
 import { getDeviceCommandHandler } from './deviceCommandMapper.js'
 import { CharacteristicMissingError, SwitchbotAuthenticationError, SwitchbotOperationError } from './errors.js'
@@ -7,6 +8,7 @@ import { CharacteristicMissingError, SwitchbotAuthenticationError, SwitchbotOper
 export interface ISwitchBotClient {
   init: () => Promise<void>
   getDevice: (id: string) => Promise<any>
+  getStatus: (id: string, maxAgeMs?: number) => Promise<any>
   getDevices: () => Promise<any[]>
   setDeviceState: (id: string, body: any) => Promise<any>
   sendIRCommand: (id: string, command: string, parameter?: string) => Promise<any>
@@ -26,6 +28,7 @@ export class SwitchBotClient implements ISwitchBotClient {
   private lastDiscoveryAt = 0
   private logger: import('homebridge').Logger
   private pendingWrites: Map<string, { timer: any, body: any, resolvers: Array<{ resolve: (v: any) => void, reject: (e: any) => void }> }> = new Map()
+  private statusCache: Map<string, { at: number, status: any }> = new Map()
 
   constructor(cfg: SwitchBotPluginConfig) {
     this.cfg = cfg
@@ -104,6 +107,42 @@ export class SwitchBotClient implements ISwitchBotClient {
       }
     }
     throw new SwitchbotOperationError('No SwitchBot client available', 'no_client')
+  }
+
+  /**
+   * Reads a device's state from the SwitchBot cloud.
+   *
+   * A device found over BLE is an object to talk to, not a reading: it carries no position and no
+   * power state, and after a restart the plugin knows nothing about a curtain until someone moves
+   * it. The cloud does know, and this is the only way to ask.
+   *
+   * The answer is cached briefly because HomeKit reads a characteristic whenever it feels like it,
+   * and the SwitchBot API allows a limited number of calls per day.
+   *
+   * @param {string} id The device id.
+   * @param {number} maxAgeMs How old an answer may be before it is asked for again.
+   * @returns {Promise<any>} The status the cloud reports, or undefined when it cannot be asked.
+   */
+  async getStatus(id: string, maxAgeMs = 20_000): Promise<any> {
+    const cached = this.statusCache.get(id)
+    if (cached && Date.now() - cached.at < maxAgeMs) {
+      return cached.status
+    }
+
+    const api = typeof (this.client as any)?.getAPIClient === 'function' ? (this.client as any).getAPIClient() : undefined
+    if (!api || typeof api.getStatus !== 'function') {
+      return undefined
+    }
+
+    try {
+      const status = await api.getStatus(id)
+      this.statusCache.set(id, { at: Date.now(), status })
+      return status
+    } catch (e) {
+      this.logger?.debug?.(`Cloud status read failed for ${id}:`, (e as Error)?.message)
+      // Better a stale reading than none: the alternative is reporting a default.
+      return cached?.status
+    }
   }
 
   async getDevices(): Promise<any[]> {

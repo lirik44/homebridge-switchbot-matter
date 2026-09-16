@@ -70,7 +70,8 @@ export class SwitchBotMatterPlatform {
   constructor(log: Logger, config: PlatformConfig, api?: API) {
     this.log = log
     // Ensure both log and logger are set for downstream device constructors
-    this.config = { ...(config as any), log, logger: log }
+    // Where an infrared remote can remember what it was last told to do, across restarts.
+    this.config = { ...(config as any), log, logger: log, storagePath: (api as any)?.user?.storagePath?.() }
     this.api = api
     this.accessories = new Map()
     this.log.info('SwitchBot Matter platform initialized')

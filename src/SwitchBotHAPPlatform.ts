@@ -1,5 +1,6 @@
-import type { SwitchBotPluginConfig } from './settings.js'
 import type { API, Logger, PlatformConfig } from 'homebridge'
+
+import type { SwitchBotPluginConfig } from './settings.js'
 
 import { createDevice } from './deviceFactory.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
@@ -59,7 +60,8 @@ export class SwitchBotHAPPlatform {
   constructor(log: Logger, config: PlatformConfig, api?: API) {
     this.log = log
     // Ensure both log and logger are set for downstream device constructors
-    this.config = { ...(config as any), log, logger: log }
+    // Where an infrared remote can remember what it was last told to do, across restarts.
+    this.config = { ...(config as any), log, logger: log, storagePath: (api as any)?.user?.storagePath?.() }
     this.api = api
     this.accessories = new Map()
     this.log.info('SwitchBot HAP platform initialized')

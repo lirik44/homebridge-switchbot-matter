@@ -1,17 +1,18 @@
 /**
  * Ensure required fields are present on the SwitchBot platform config
  */
-export function enforcePlatformConfigFields(platform: any): void {
-  if (!platform) return
-  if (!platform.platform) platform.platform = 'SwitchBot'
-  if (!platform.name) platform.name = 'SwitchBot'
-  if (!Array.isArray(platform.devices)) platform.devices = []
-}
 import type { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils'
 
 import fs from 'node:fs/promises'
 
 import { uiLog } from './logger.js'
+
+export function enforcePlatformConfigFields(platform: any): void {
+  if (!platform) { return }
+  if (!platform.platform) { platform.platform = 'SwitchBot' }
+  if (!platform.name) { platform.name = 'SwitchBot' }
+  if (!Array.isArray(platform.devices)) { platform.devices = [] }
+}
 
 // Module-scope regex pattern to avoid recompilation
 export const SWITCHBOT_PLATFORM_REGEX = /switchbot/i

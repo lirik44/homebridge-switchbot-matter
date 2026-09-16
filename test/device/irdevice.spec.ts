@@ -1,3 +1,7 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { IRLightDevice } from '../../src/devices/irDevice'
@@ -147,5 +151,28 @@ describe('collectConfiguredDevices', () => {
   it('copes with a config that has neither key', () => {
     expect(collectConfiguredDevices({})).toStrictEqual([])
     expect(collectConfiguredDevices(undefined)).toStrictEqual([])
+  })
+})
+
+describe('remembering what the remote was told', () => {
+  // A remote has nothing to read back, so if the plugin forgets on restart it reports the lights
+  // off while they are on - and every controller is told so.
+  it('carries the last command across a restart', async () => {
+    const storagePath = mkdtempSync(join(tmpdir(), 'switchbot-ir-'))
+    const client = { sendIRCommand: vi.fn(async () => ({ statusCode: 100 })) }
+    const opts = { id: 'ir-1', type: 'ir light', name: 'Christmas Light', log, storagePath }
+
+    const before = new IRLightDevice(opts as any, { _client: client } as any)
+    await before.setState({ on: true })
+
+    const after = new IRLightDevice(opts as any, { _client: client } as any)
+    await expect(after.getState()).resolves.toEqual(expect.objectContaining({ on: true }))
+  })
+
+  it('starts off when there is nowhere to remember it', async () => {
+    const client = { sendIRCommand: vi.fn(async () => ({ statusCode: 100 })) }
+    const device = new IRLightDevice({ id: 'ir-2', type: 'ir light', log } as any, { _client: client } as any)
+    await device.setState({ on: true })
+    await expect(device.getState()).resolves.toEqual(expect.objectContaining({ on: true }))
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { matterStateFor, matterStateFromHap } from '../../src/utils'
+import { matterStateFor, matterStateFromHap, stateFromApiStatus } from '../../src/utils'
 
 describe('matterStateFor', () => {
   // HomeKit asks for a value whenever it wants one; a Matter controller reads its own cached copy
@@ -133,5 +133,23 @@ describe('matterStateFromHap', () => {
   it('reports nothing for a descriptor it cannot read', async () => {
     await expect(matterStateFromHap(undefined)).resolves.toBeUndefined()
     await expect(matterStateFromHap({ services: [{ type: 'Battery', characteristics: {} }] })).resolves.toBeUndefined()
+  })
+})
+
+describe('stateFromApiStatus', () => {
+  it('reads a curtain position, which BLE discovery does not carry', () => {
+    expect(stateFromApiStatus({ deviceId: 'D1', slidePosition: 0 })).toStrictEqual({ position: 0 })
+    expect(stateFromApiStatus({ deviceId: 'D1', slidePosition: 100 })).toStrictEqual({ position: 100 })
+  })
+
+  it('reads power, brightness and the sensor readings', () => {
+    expect(stateFromApiStatus({ power: 'on', brightness: 40 })).toStrictEqual({ on: true, brightness: 40 })
+    expect(stateFromApiStatus({ power: 'OFF' })).toStrictEqual({ on: false })
+    expect(stateFromApiStatus({ temperature: 23.4, humidity: 51 })).toStrictEqual({ temperature: 23.4, humidity: 51 })
+  })
+
+  it('reports nothing for a status with nothing this plugin reads', () => {
+    expect(stateFromApiStatus({ deviceId: 'D1', deviceType: 'Hub 2', version: '1.2' })).toBeUndefined()
+    expect(stateFromApiStatus(undefined)).toBeUndefined()
   })
 })

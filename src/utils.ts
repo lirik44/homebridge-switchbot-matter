@@ -1491,3 +1491,46 @@ export async function matterStateFromHap(descriptor: any): Promise<Record<string
 
   return Object.keys(clusters).length > 0 ? clusters : undefined
 }
+
+/**
+ * Turns a SwitchBot cloud status into the state shape the devices work in.
+ *
+ * @param {any} status The body of a `/status` reading.
+ * @returns {Record<string, any> | undefined} The readable parts of it, or undefined when there
+ * is nothing this plugin understands.
+ */
+export function stateFromApiStatus(status: any): Record<string, any> | undefined {
+  if (!status || typeof status !== 'object') {
+    return undefined
+  }
+
+  const state: Record<string, any> = {}
+
+  if (typeof status.slidePosition === 'number') {
+    // The cloud counts a curtain from the open end, and so does this plugin.
+    state.position = Math.max(0, Math.min(100, Math.round(status.slidePosition)))
+  }
+  if (typeof status.power === 'string') {
+    state.on = status.power.toLowerCase() === 'on'
+  }
+  if (typeof status.brightness === 'number') {
+    state.brightness = Math.max(0, Math.min(100, Math.round(status.brightness)))
+  }
+  if (typeof status.temperature === 'number') {
+    state.temperature = status.temperature
+  }
+  if (typeof status.humidity === 'number') {
+    state.humidity = status.humidity
+  }
+  if (typeof status.moveDetected === 'boolean') {
+    state.moveDetected = status.moveDetected
+  }
+  if (typeof status.openState === 'string') {
+    state.openState = status.openState
+  }
+  if (typeof status.battery === 'number') {
+    state.battery = status.battery
+  }
+
+  return Object.keys(state).length > 0 ? state : undefined
+}

@@ -1,7 +1,8 @@
 import type { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils'
 
-import { RequestError } from '@homebridge/plugin-ui-utils'
 import fs from 'node:fs/promises'
+
+import { RequestError } from '@homebridge/plugin-ui-utils'
 
 import { isValidDeviceType } from '../../device-types.js'
 import { getAllDevices, SWITCHBOT_PLATFORM_REGEX } from '../utils/config-parser.js'

@@ -35,7 +35,7 @@ import {
 } from './devices/genericDevice.js'
 import { IRLightDevice } from './devices/irDevice.js'
 import { SwitchBotClient } from './switchbotClient.js'
-import { isInfraredType } from './utils.js'
+import { isInfraredType, stateFromApiStatus } from './utils.js'
 
 export interface DeviceOptions {
   id: string
@@ -224,16 +224,33 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
   device.getState = isInfraredType(opts.type)
     ? originalGetState
     : async () => {
+      let local: any
       try {
         // Prefer client-backed getDevice when available
-        const dev = await client.getDevice(opts.id)
-        if (dev) {
-          return dev
-        }
+        local = await client.getDevice(opts.id)
       } catch (e) {
         // ignore and fallback to device implementation
       }
-      return originalGetState()
+      if (!local) {
+        try {
+          local = await originalGetState()
+        } catch (e) {
+          // ignore; the cloud reading below may still have something
+        }
+      }
+
+      // A device found over BLE is something to talk to, not a reading - it carries no position
+      // and no power state. Whatever the cloud knows takes precedence over what it does not.
+      let reported: Record<string, any> | undefined
+      try {
+        if (typeof client.getStatus === 'function') {
+          reported = stateFromApiStatus(await client.getStatus(opts.id))
+        }
+      } catch (e) {
+        // ignore; a stale or missing cloud reading is not worth failing a HomeKit read over
+      }
+
+      return reported ? { ...(local ?? {}), ...reported } : local
     }
 
   instances.set(opts.id, device)

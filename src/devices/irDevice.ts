@@ -3,6 +3,9 @@ import type { Logger } from 'homebridge'
 import type { SwitchBotPluginConfig } from '../settings.js'
 import type { DeviceOptions } from './deviceBase.js'
 
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { DeviceBase } from './deviceBase.js'
 
 /**
@@ -17,6 +20,8 @@ export class IRDevice extends DeviceBase {
   protected log: Logger
   /** What was last sent to the remote. There is no way to ask the appliance itself. */
   protected on: boolean
+  /** Where that is kept, so a restart does not claim the lights went off. */
+  private readonly stateFile: string | undefined
 
   constructor(opts: DeviceOptions, cfg: SwitchBotPluginConfig) {
     super(opts, cfg)
@@ -24,7 +29,41 @@ export class IRDevice extends DeviceBase {
     if (!this.log) {
       throw new Error('IR device requires a logger (Homebridge logger) in opts or cfg')
     }
-    this.on = (opts as any)?.initialState === true
+    const storagePath = (opts as any)?.storagePath ?? (cfg as any)?.storagePath
+    this.stateFile = typeof storagePath === 'string' ? join(storagePath, 'switchbot-ir-state.json') : undefined
+    this.on = this.readRemembered() ?? (opts as any)?.initialState === true
+  }
+
+  /**
+   * @returns {boolean | undefined} What the remote was last told to do before the last restart.
+   */
+  private readRemembered(): boolean | undefined {
+    if (!this.stateFile || !existsSync(this.stateFile)) {
+      return undefined
+    }
+    try {
+      const remembered = JSON.parse(readFileSync(this.stateFile, 'utf8'))?.[this.opts.id]?.on
+      return typeof remembered === 'boolean' ? remembered : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * @param {boolean} on What the remote was just told to do.
+   * @returns {void}
+   */
+  private remember(on: boolean): void {
+    if (!this.stateFile) {
+      return
+    }
+    try {
+      const all = existsSync(this.stateFile) ? JSON.parse(readFileSync(this.stateFile, 'utf8')) ?? {} : {}
+      all[this.opts.id] = { on }
+      writeFileSync(this.stateFile, JSON.stringify(all, null, 2))
+    } catch (e) {
+      this.log.debug(`[${this.opts.id}] Could not remember the remote's state:`, e instanceof Error ? e.message : e)
+    }
   }
 
   async getState(): Promise<any> {
@@ -47,6 +86,7 @@ export class IRDevice extends DeviceBase {
       // Only remember the new state once the hub accepted the command, so a failed press does
       // not leave the controller showing a light that was never turned on.
       this.on = change.on
+      this.remember(change.on)
       this.log.debug(`[${this.opts.id}] Sent ${command} to the IR remote`)
       return { success: true, result }
     } catch (e) {
