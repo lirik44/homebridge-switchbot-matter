@@ -8,6 +8,12 @@ import { SwitchBotClient } from './switchbotClient.js'
 import { collectConfiguredDevices, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
 
 /**
+ * When an accessory is read back after being commanded. A curtain is still on its way for the
+ * first of these, and settled well before the last.
+ */
+const REFRESH_AFTER_COMMAND_MS = [2000, 8000, 20_000, 40_000]
+
+/**
  * Homebridge platform class for SwitchBot Matter integration.
  * Handles device discovery, registration, polling, and accessory lifecycle for Matter-enabled SwitchBot devices.
  *
@@ -51,13 +57,13 @@ export class SwitchBotMatterPlatform {
   /** Timestamp (ms) of last OpenAPI daily counter reset */
   private openApiLastReset = 0
   /** The accessories to keep in step with their devices, by UUID */
-  private synced: Map<string, { device: any, type: string, hap?: any }> = new Map()
+  private synced: Map<string, { device: any, type: string, deviceId: string, hap?: any }> = new Map()
   /** The attributes last published per accessory and cluster, so an unchanged poll writes nothing */
   private published: Map<string, string> = new Map()
   /** Timer for the periodic state sync */
   private stateSyncInterval: NodeJS.Timeout | null = null
-  /** Timers for the refresh that follows a command */
-  private refreshTimers: Map<string, NodeJS.Timeout> = new Map()
+  /** Timers for the refreshes that follow a command */
+  private refreshTimers: Map<string, NodeJS.Timeout[]> = new Map()
   /** Accessories already reported as unreadable or unpublishable, so the log is not repeated */
   private syncComplaints: Set<string> = new Set()
 
@@ -242,7 +248,7 @@ export class SwitchBotMatterPlatform {
             firmwareRevision: createdDesc.firmwareRevision || '1.0.0',
             hardwareRevision: createdDesc.hardwareRevision || '',
             clusters,
-            handlers: createdDesc.handlers || createMatterHandlers(this.log, d.id, type, (this.config as any)?._client) || undefined,
+            handlers: this._watchMatterCommands(uuid, createdDesc.handlers || createMatterHandlers(this.log, d.id, type, (this.config as any)?._client) || undefined),
             context: { deviceId: d.id, type, created: true },
           }
           accessoriesToRegister.push(accessory)
@@ -265,13 +271,13 @@ export class SwitchBotMatterPlatform {
           accessory.firmwareRevision = accessory.firmwareRevision || createdDesc.firmwareRevision || '1.0.0'
           accessory.hardwareRevision = accessory.hardwareRevision || createdDesc.hardwareRevision || ''
           accessory.clusters = clusters
-          accessory.handlers = createdDesc.handlers || createMatterHandlers(this.log, d.id, type, (this.config as any)?._client) || undefined
+          accessory.handlers = this._watchMatterCommands(accessory.UUID || accessory.uuid || uuid, createdDesc.handlers || createMatterHandlers(this.log, d.id, type, (this.config as any)?._client) || undefined)
           accessory.displayName = createdDesc.name || d.name || type
           accessory.UUID = accessory.UUID || accessory.uuid || uuid
           accessoriesToRegister.push(accessory)
           this.accessories.set(accessory.UUID || uuid, accessory)
         }
-        this.synced.set(accessory.UUID ?? uuid, { device: created.instance, type })
+        this.synced.set(accessory.UUID ?? uuid, { device: created.instance, type, deviceId: d.id })
         this.log.info(`Created/updated Matter accessory ${d.id} (${type})`)
       } catch (e) {
         this.log.warn(`Matter accessory creation failed for ${d.id} (${type})`, e)
@@ -340,12 +346,69 @@ export class SwitchBotMatterPlatform {
     const original = device.setState.bind(device)
     device.setState = async (change: any) => {
       const result = await original(change)
-      this.log.debug(`[Matter] ${uuid} was commanded, refreshing shortly`)
-      clearTimeout(this.refreshTimers.get(uuid))
-      this.refreshTimers.set(uuid, setTimeout(() => void this._syncState(uuid), 1500))
+      this._refreshAfterCommand(uuid)
       return result
     }
     device._matterSyncHooked = true
+  }
+
+  /**
+   * Wraps the handlers a Matter controller calls, so a command from that side is followed by the
+   * same refresh a command from HomeKit is.
+   *
+   * These handlers talk to the SwitchBot cloud directly rather than through the device instance,
+   * so without this the plugin never learns that anything happened and the change waits for the
+   * next scheduled sync - a minute of a controller showing the old position.
+   *
+   * @param {string} uuid The accessory UUID.
+   * @param {any} handlers The cluster handlers, as the accessory declares them.
+   * @returns {any} The same handlers, each followed by a refresh.
+   */
+  private _watchMatterCommands(uuid: string, handlers: any): any {
+    if (!handlers || typeof handlers !== 'object') {
+      return handlers
+    }
+
+    const watched: Record<string, any> = {}
+    for (const [cluster, commands] of Object.entries(handlers)) {
+      if (!commands || typeof commands !== 'object') {
+        watched[cluster] = commands
+        continue
+      }
+
+      const watchedCommands: Record<string, any> = {}
+      for (const [name, handler] of Object.entries(commands as Record<string, any>)) {
+        watchedCommands[name] = typeof handler === 'function'
+          ? async (...args: any[]) => {
+            const result = await handler(...args)
+            this._refreshAfterCommand(uuid)
+            return result
+          }
+          : handler
+      }
+      watched[cluster] = watchedCommands
+    }
+    return watched
+  }
+
+  /**
+   * Reads an accessory back a few times after it has been commanded.
+   *
+   * Once is not enough for a curtain: the motor takes the better part of half a minute, and a
+   * reading taken straight after the command still shows where it set off from.
+   *
+   * @param {string} uuid The accessory that was commanded.
+   * @returns {void}
+   */
+  private _refreshAfterCommand(uuid: string): void {
+    this.log.debug(`[Matter] ${uuid} was commanded, reading it back`)
+    for (const timer of this.refreshTimers.get(uuid) ?? []) {
+      clearTimeout(timer)
+    }
+    this.refreshTimers.set(
+      uuid,
+      REFRESH_AFTER_COMMAND_MS.map(delay => setTimeout(() => void this._syncState(uuid, true), delay)),
+    )
   }
 
   /**
@@ -363,7 +426,7 @@ export class SwitchBotMatterPlatform {
    * @param {string} uuid The accessory to bring up to date.
    * @returns {Promise<void>} Resolves once its attributes have been published.
    */
-  private async _syncState(uuid: string): Promise<void> {
+  private async _syncState(uuid: string, fresh = false): Promise<void> {
     const entry = this.synced.get(uuid)
     const matterApi = (this.api as any)?.matter
     if (!entry || !matterApi || typeof matterApi.updateAccessoryState !== 'function') {
@@ -371,6 +434,16 @@ export class SwitchBotMatterPlatform {
     }
 
     try {
+      if (fresh) {
+        // A reading held over from before the command is worse than none: it is the old position.
+        const client = (this.config as any)?._client
+        try {
+          await client?.getStatus?.(entry.deviceId, 0)
+        } catch {
+          // The device answers the next read, or the scheduled sync picks it up.
+        }
+      }
+
       const clusters = await this._readState(entry)
       if (!clusters) {
         this._complainOnce(`${uuid}:unreadable`, `[Matter] Nothing readable to report for ${entry.type} ${uuid}`)
@@ -387,15 +460,8 @@ export class SwitchBotMatterPlatform {
 
         await matterApi.updateAccessoryState(uuid, cluster, attributes)
         this.published.set(key, payload)
-        // The first value of each cluster is worth seeing without turning on debug logging: it is
-        // the proof that the Matter side is being told anything at all.
-        const report = `[Matter] ${entry.type} ${uuid}: ${cluster} = ${payload}`
-        if (this.syncComplaints.has(`${key}:published`)) {
-          this.log.debug(report)
-        } else {
-          this.syncComplaints.add(`${key}:published`)
-          this.log.info(report)
-        }
+        // A change is an event, not a poll: worth a line without turning on debug logging.
+        this.log.info(`[Matter] ${entry.type} ${uuid}: ${cluster} = ${payload}`)
       }
     } catch (e) {
       this._complainOnce(`${uuid}:failed`, `[Matter] Could not sync ${entry.type} ${uuid}: ${(e as Error)?.message ?? e}`)
@@ -413,7 +479,7 @@ export class SwitchBotMatterPlatform {
    * @param {{ device: any, type: string, hap?: any }} entry The synced accessory.
    * @returns {Promise<Record<string, any> | undefined>} The cluster attributes to publish.
    */
-  private async _readState(entry: { device: any, type: string, hap?: any }): Promise<Record<string, any> | undefined> {
+  private async _readState(entry: { device: any, type: string, deviceId: string, hap?: any }): Promise<Record<string, any> | undefined> {
     if (entry.hap === undefined && typeof entry.device?.createHAPAccessory === 'function') {
       try {
         entry.hap = entry.device.createHAPAccessory(this.api) ?? null
@@ -532,8 +598,10 @@ export class SwitchBotMatterPlatform {
       clearInterval(this.stateSyncInterval)
       this.stateSyncInterval = null
     }
-    for (const timer of this.refreshTimers.values()) {
-      clearTimeout(timer)
+    for (const timers of this.refreshTimers.values()) {
+      for (const timer of timers) {
+        clearTimeout(timer)
+      }
     }
     this.refreshTimers.clear()
     this.syncComplaints.clear()
