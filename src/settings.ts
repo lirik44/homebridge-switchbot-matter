@@ -6,7 +6,7 @@ export interface SwitchBotPluginConfig {
   openApiSecret?: string
   preferMatter?: boolean
   enableMatter?: boolean
-  enableBLE?: boolean // Enable or disable BLE support
+  enableBLE?: boolean // Reach devices over Bluetooth; needs node-switchbot installed alongside this plugin
   // other plugin-specific configuration
   [key: string]: any
 }
@@ -14,7 +14,7 @@ export interface SwitchBotPluginConfig {
 export const DEFAULT_CONFIG: Partial<SwitchBotPluginConfig> = {
   preferMatter: true,
   enableMatter: true,
-  enableBLE: true,
+  enableBLE: false,
 }
 
 export type DeviceType = string

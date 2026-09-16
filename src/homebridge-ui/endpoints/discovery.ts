@@ -2,8 +2,34 @@ import type { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils'
 
 import { RequestError } from '@homebridge/plugin-ui-utils'
 
+import { OpenApiClient } from '../../openApiClient.js'
 import { getCredential, getSwitchBotPlatformConfig } from '../utils/config-parser.js'
 import { uiLog } from '../utils/logger.js'
+
+/** Installed separately, when someone wants to reach devices without a hub. */
+const BLE_LIBRARY = 'node-switchbot'
+
+/**
+ * @param {string | undefined} token The SwitchBot token, for devices reachable both ways.
+ * @param {string | undefined} secret Its secret.
+ * @returns {Promise<any>} A Bluetooth-capable client, or undefined when the library is absent.
+ */
+async function loadBluetooth(token?: string, secret?: string): Promise<any> {
+  try {
+    const { SwitchBot } = await import(BLE_LIBRARY)
+    return new SwitchBot({
+      token: token || undefined,
+      secret: secret || undefined,
+      enableBLE: true,
+      enableFallback: true,
+      enableRetry: true,
+      enableCircuitBreaker: true,
+      enableConnectionIntelligence: true,
+    })
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Register discovery endpoint
@@ -15,16 +41,10 @@ export function registerDiscoveryEndpoint(server: HomebridgePluginUiServer) {
       const { platform } = await getSwitchBotPlatformConfig(server)
       const token = getCredential(platform, 'openApiToken') || platform.token
       const secret = getCredential(platform, 'openApiSecret') || platform.secret
-      const { SwitchBot } = await import('node-switchbot')
-      const switchbot = new SwitchBot({
-        token: token || undefined,
-        secret: secret || undefined,
-        enableBLE: true,
-        enableFallback: true,
-        enableRetry: true,
-        enableCircuitBreaker: true,
-        enableConnectionIntelligence: true,
-      })
+      const switchbot = await loadBluetooth(token, secret)
+      if (!switchbot) {
+        return { success: true, data: { available: false, message: `Bluetooth support needs ${BLE_LIBRARY} installed alongside this plugin` } }
+      }
 
       await switchbot.discover({ timeout: 1000 })
       return { success: true, data: { available: true, message: 'adapter ready' } }
@@ -60,22 +80,15 @@ export function registerDiscoveryEndpoint(server: HomebridgePluginUiServer) {
         uiLog.info('GET /discover - Using OpenAPI credentials for discovery')
       }
 
-      // Import and initialize node-switchbot
-      const { SwitchBot } = await import('node-switchbot')
-      const switchbot = new SwitchBot({
-        token: token || undefined,
-        secret: secret || undefined,
-        enableBLE: true,
-        enableFallback: true,
-        enableRetry: true,
-        enableCircuitBreaker: true,
-        enableConnectionIntelligence: true,
-      })
+      const switchbot = runBle ? await loadBluetooth(token, secret) : undefined
+      if (runBle && !switchbot) {
+        uiLog.info(`GET /discover - Skipping the Bluetooth scan: ${BLE_LIBRARY} is not installed alongside this plugin`)
+      }
 
       const deviceMap = new Map<string, any>()
 
       // 1. Try BLE discovery first (with timeout)
-      if (runBle) {
+      if (runBle && switchbot) {
         uiLog.info('GET /discover - Starting BLE scan...')
         try {
           const bleTimeout = bleTimeoutSeconds * 1000
@@ -128,11 +141,7 @@ export function registerDiscoveryEndpoint(server: HomebridgePluginUiServer) {
       if (runOpenApi && hasOpenAPICredentials) {
         uiLog.info('GET /discover - Fetching devices from OpenAPI...')
         try {
-          const apiClient = switchbot.getAPIClient()
-          if (!apiClient) {
-            throw new Error('API client not available - token/secret may be missing')
-          }
-          const apiData = await apiClient.getDevices()
+          const apiData = await new OpenApiClient(token, secret).getDevices()
           uiLog.debug(`GET /discover - OpenAPI response: ${JSON.stringify(apiData)}`)
 
           // Parse physical devices - apiData is DeviceListResponse with deviceList and infraredRemoteList

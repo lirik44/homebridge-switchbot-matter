@@ -6,15 +6,15 @@ const openApiMocks = vi.hoisted(() => {
   const getStatus = vi.fn()
   return {
     getStatus,
-    // Use a function implementation so the mock is constructible with `new OpenAPIClient()`
+    // Use a function implementation so the mock is constructible with `new OpenApiClient()`
     // eslint-disable-next-line prefer-arrow-callback
-    OpenAPIClient: vi.fn().mockImplementation(function () { return { getStatus } }),
+    OpenApiClient: vi.fn().mockImplementation(function () { return { getStatus } }),
 
   }
 })
 
-vi.mock('node-switchbot', () => ({
-  OpenAPIClient: openApiMocks.OpenAPIClient,
+vi.mock('../../src/openApiClient.js', () => ({
+  OpenApiClient: openApiMocks.OpenApiClient,
 }))
 
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -65,7 +65,7 @@ describe('water detector device battery service', () => {
     await device.init()
 
     const batteryService = getBatteryService(device)
-    expect(openApiMocks.OpenAPIClient).toHaveBeenCalledWith('token', 'secret')
+    expect(openApiMocks.OpenApiClient).toHaveBeenCalledWith('token', 'secret', mockLogger)
     expect(openApiMocks.getStatus).toHaveBeenCalledWith('wd1')
     expect(batteryService.characteristics.BatteryLevel.get()).toBe(87)
     expect(batteryService.characteristics.StatusLowBattery.get()).toBe(0)

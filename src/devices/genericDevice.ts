@@ -1413,9 +1413,8 @@ export class WaterDetectorDevice extends GenericDevice {
     }
 
     try {
-      const { OpenAPIClient } = await import('node-switchbot')
-      const apiClient = new OpenAPIClient(token, secret)
-      return await apiClient.getStatus(this.opts.id)
+      const { OpenApiClient } = await import('../openApiClient.js')
+      return await new OpenApiClient(token, secret, this.log).getStatus(this.opts.id)
     } catch (e) {
       this.log?.debug?.(`[WaterDetector] direct OpenAPI refresh failed: ${(e as Error)?.message}`)
     }

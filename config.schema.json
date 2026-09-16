@@ -30,8 +30,8 @@
       "enableBLE": {
         "type": "boolean",
         "title": "Enable BLE (Bluetooth)",
-        "description": "Enable or disable BLE (Bluetooth Low Energy) support. If disabled, only OpenAPI (cloud) will be used.",
-        "default": true
+        "description": "Reach devices directly over Bluetooth instead of through the hub. Off by default: it needs the node-switchbot package installed alongside this plugin, which builds a native Bluetooth stack on install. With a SwitchBot hub, everything works over the cloud without it.",
+        "default": false
       },
       "devices": {
         "type": "array",

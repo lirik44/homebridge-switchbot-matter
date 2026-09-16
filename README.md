@@ -310,11 +310,25 @@ These controls keep API usage smooth and predictable while preserving per-device
 ## What's new with node-switchbot v4.0.0
 
 - Matter-first: when Homebridge Matter is available the plugin now prefers registering Matter accessories (with HAP fallback).
-- Hybrid client: the plugin uses `node-switchbot@^4.0.0` with BLE + OpenAPI discovery and OpenAPI fallback.
+- Cloud by default: this fork talks to the SwitchBot cloud API directly and does not install a Bluetooth stack. See "Bluetooth" below.
 - OpenAPI credentials: cloud discovery and cloud fallback paths require both `openApiToken` and `openApiSecret`.
 - UI always served: the plugin UI is packaged into `dist/homebridge-ui` and is always served when Homebridge UI support is present; there is no platform-level opt-out.
 - OpenAPI hardening: OpenAPI calls have AbortController timeouts, jittered exponential backoff, per-device retry limits and cooldowns, and safe response parsing for resilient behavior.
-- v4 resilience enabled in discovery: plugin discovery enables retry, circuit-breaker, and connection-intelligence flags from `node-switchbot` v4.
+
+## Bluetooth
+
+This fork reaches devices through the SwitchBot hub and cloud. It does not depend on
+`node-switchbot`, which carries a native Bluetooth stack that is compiled from C++ wherever the
+plugin is installed - minutes of it on a Raspberry Pi, on every install and every update.
+
+To reach devices directly over Bluetooth instead - useful without a hub - install the library
+alongside the plugin and set `enableBLE: true`:
+
+```
+npm --prefix /var/lib/homebridge install node-switchbot
+```
+
+Without it, `enableBLE` is ignored and everything goes through the cloud.
 
 - Write coalescing (debounce): command writes to the same device are coalesced by default to avoid command floods. Configure with `writeDebounceMs` (milliseconds, default 100). Set to `0` to disable coalescing.
 

@@ -1,9 +1,14 @@
-import type { SwitchBot } from 'node-switchbot'
-
 import type { SwitchBotPluginConfig } from './settings.js'
 
 import { getDeviceCommandHandler } from './deviceCommandMapper.js'
 import { CharacteristicMissingError, SwitchbotAuthenticationError, SwitchbotOperationError } from './errors.js'
+import { OpenApiClient } from './openApiClient.js'
+
+/**
+ * The Bluetooth library, which is not installed by default: it carries a native stack that has to
+ * be compiled wherever this plugin is installed, and a hub makes it unnecessary.
+ */
+const BLE_LIBRARY = 'node-switchbot'
 
 export interface ISwitchBotClient {
   init: () => Promise<void>
@@ -22,7 +27,9 @@ export interface ISwitchBotClient {
  */
 export class SwitchBotClient implements ISwitchBotClient {
   private cfg: SwitchBotPluginConfig
-  private client: SwitchBot | null = null
+  private client: any | null = null
+  private api: OpenApiClient | null = null
+  private cloudDevices: { at: number, devices: any[] } | null = null
   private writeDebounceMs = 100
   private discoveryCacheTtlMs = 30_000
   private lastDiscoveryAt = 0
@@ -45,36 +52,85 @@ export class SwitchBotClient implements ISwitchBotClient {
   }
 
   async init(): Promise<void> {
-    if (this.client) {
+    if (this.client || this.api) {
       return
     }
 
-    try {
-      // Dynamic import of node-switchbot v4 with native resilience features
-      const { SwitchBot } = await import('node-switchbot')
-      const rawNodeClientConfig = typeof (this.cfg as any)?.nodeClientConfig === 'object' ? (this.cfg as any).nodeClientConfig : {}
-      const scanTimeout = this.resolveScanTimeoutMs(rawNodeClientConfig)
-      this.client = new SwitchBot({
-        token: this.cfg.openApiToken,
-        secret: this.cfg.openApiSecret,
-        // Enable built-in resilience features from node-switchbot v4.
-        enableFallback: true, // Auto-fallback from BLE to API
-        enableRetry: true, // Retry with exponential backoff
-        enableCircuitBreaker: true, // Circuit breaker per connection type
-        enableConnectionIntelligence: true, // Connection tracking and route preference
-        enableBLE: this.cfg.enableBLE !== false, // Use config value, default true
-        scanTimeout,
-        ...rawNodeClientConfig,
-      })
-      this.lastDiscoveryAt = 0
-      this.logger?.info?.('SwitchBot client initialized with native resilience features')
-    } catch (e) {
-      this.logger?.warn?.('Failed to load node-switchbot; will use OpenAPI fallback:', e)
-      this.client = null
+    if (this.cfg.enableBLE === true) {
+      try {
+        // Only loaded when asked for: see BLE_LIBRARY. The specifier is held in a variable so
+        // that a build does not require the package to be there.
+        const { SwitchBot } = await import(BLE_LIBRARY)
+        const rawNodeClientConfig = typeof (this.cfg as any)?.nodeClientConfig === 'object' ? (this.cfg as any).nodeClientConfig : {}
+        const scanTimeout = this.resolveScanTimeoutMs(rawNodeClientConfig)
+        this.client = new SwitchBot({
+          token: this.cfg.openApiToken,
+          secret: this.cfg.openApiSecret,
+          // Enable built-in resilience features from node-switchbot v4.
+          enableFallback: true, // Auto-fallback from BLE to API
+          enableRetry: true, // Retry with exponential backoff
+          enableCircuitBreaker: true, // Circuit breaker per connection type
+          enableConnectionIntelligence: true, // Connection tracking and route preference
+          enableBLE: true,
+          scanTimeout,
+          ...rawNodeClientConfig,
+        })
+        this.lastDiscoveryAt = 0
+        this.logger?.info?.('SwitchBot client initialized over Bluetooth and the cloud')
+        return
+      } catch (e) {
+        this.logger?.warn?.(`Bluetooth support needs ${BLE_LIBRARY} installed alongside this plugin; falling back to the cloud:`, (e as Error)?.message)
+        this.client = null
+      }
     }
+
+    if (!this.cfg.openApiToken || !this.cfg.openApiSecret) {
+      this.logger?.error?.('No SwitchBot token and secret configured: the plugin has no way to reach the devices')
+      return
+    }
+
+    this.api = new OpenApiClient(this.cfg.openApiToken, this.cfg.openApiSecret, this.logger)
+    this.logger?.info?.('SwitchBot client initialized against the cloud')
+  }
+
+  /**
+   * @returns {any} Whichever client can talk to the SwitchBot cloud - the one inside the Bluetooth
+   * library when that is in use, and this plugin's own otherwise.
+   */
+  private get cloud(): any {
+    const fromLibrary = typeof (this.client as any)?.getAPIClient === 'function' ? (this.client as any).getAPIClient() : undefined
+    return fromLibrary ?? this.api
+  }
+
+  /**
+   * Lists what the account holds, as plain objects rather than things to talk to.
+   *
+   * @param {boolean} force Whether to ask again rather than use the last answer.
+   * @returns {Promise<any[]>} Every device and infrared remote, each with an `id` and a
+   * `deviceType`.
+   */
+  private async listCloudDevices(force = false): Promise<any[]> {
+    const fresh = this.cloudDevices && Date.now() - this.cloudDevices.at < 60_000
+    if (!force && fresh) {
+      return this.cloudDevices!.devices
+    }
+
+    const { deviceList, infraredRemoteList } = await this.cloud.getDevices()
+    const devices = [
+      ...deviceList.map((d: any) => ({ ...d, id: d.deviceId, name: d.deviceName, type: d.deviceType })),
+      // A remote has no device type of its own; what it pretends to be is its remote type.
+      ...infraredRemoteList.map((d: any) => ({ ...d, id: d.deviceId, name: d.deviceName, type: d.remoteType, deviceType: d.remoteType, isIR: true })),
+    ]
+    this.cloudDevices = { at: Date.now(), devices }
+    return devices
   }
 
   async getDevice(id: string): Promise<any> {
+    if (!this.client && this.api) {
+      const devices = await this.listCloudDevices()
+      return devices.find((d: any) => d.id === id) ?? (await this.listCloudDevices(true)).find((d: any) => d.id === id)
+    }
+
     if (this.client) {
       try {
         const fromManager = this.getManagedDevice(id)
@@ -129,7 +185,7 @@ export class SwitchBotClient implements ISwitchBotClient {
       return cached.status
     }
 
-    const api = typeof (this.client as any)?.getAPIClient === 'function' ? (this.client as any).getAPIClient() : undefined
+    const api = this.cloud
     if (!api || typeof api.getStatus !== 'function') {
       return undefined
     }
@@ -146,6 +202,10 @@ export class SwitchBotClient implements ISwitchBotClient {
   }
 
   async getDevices(): Promise<any[]> {
+    if (!this.client && this.api) {
+      return this.listCloudDevices()
+    }
+
     if (this.client) {
       try {
         const fromManager = this.getManagedDevices()
@@ -214,11 +274,11 @@ export class SwitchBotClient implements ISwitchBotClient {
    * @param parameter The command parameter; `default` for the standard buttons.
    */
   async sendIRCommand(id: string, command: string, parameter: string = 'default'): Promise<any> {
-    if (!this.client) {
+    if (!this.client && !this.api) {
       throw new SwitchbotOperationError('No SwitchBot client available for IR command', 'no_client')
     }
 
-    const api = typeof (this.client as any).getAPIClient === 'function' ? (this.client as any).getAPIClient() : undefined
+    const api = this.cloud
     if (!api || typeof api.sendCommand !== 'function') {
       throw new SwitchbotOperationError(
         'Infrared remotes are only reachable through the SwitchBot cloud: set openApiToken and openApiSecret',
@@ -230,7 +290,37 @@ export class SwitchBotClient implements ISwitchBotClient {
     return api.sendCommand(id, command, parameter)
   }
 
+  /**
+   * Sends a command the way the cloud expects it.
+   *
+   * @param {string} id The device to command.
+   * @param {any} body The command, as the rest of the plugin words it.
+   * @returns {Promise<any>} Whatever the cloud answers.
+   */
+  private async _sendCloudCommand(id: string, body: any): Promise<any> {
+    const command = body?.command
+    if (!command) {
+      throw new SwitchbotOperationError('No command specified in body', 'no_command')
+    }
+
+    const device = await this.getDevice(id)
+    const deviceType = String(device?.deviceType ?? '').toLowerCase()
+    let parameter = body?.parameter ?? 'default'
+
+    // A curtain takes its position as index, mode and percentage together; everywhere else in
+    // this plugin a position is just the percentage.
+    if (command === 'setPosition' && !String(parameter).includes(',') && (deviceType.includes('curtain') || deviceType.includes('blind'))) {
+      parameter = `0,ff,${parameter}`
+    }
+
+    this.logger?.debug?.(`[${id}] Sending ${command} (${parameter}) over the cloud`)
+    return this.cloud.sendCommand(id, command, parameter, body?.commandType ?? 'command')
+  }
+
   private async _doSetDeviceState(id: string, body: any): Promise<any> {
+    if (!this.client && this.api) {
+      return this._sendCloudCommand(id, body)
+    }
     if (!this.client) {
       throw new SwitchbotOperationError('No SwitchBot client available for setDeviceState', 'no_client')
     }
@@ -281,6 +371,8 @@ export class SwitchBotClient implements ISwitchBotClient {
       await this.client.cleanup()
     }
     this.client = null
+    this.api = null
+    this.cloudDevices = null
     this.lastDiscoveryAt = 0
   }
 
