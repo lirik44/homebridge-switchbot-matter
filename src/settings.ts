@@ -18,3 +18,9 @@ export const DEFAULT_CONFIG: Partial<SwitchBotPluginConfig> = {
 }
 
 export type DeviceType = string
+
+/**
+ * When an accessory is read back after being commanded. A curtain is still on its way for the
+ * first of these, and settled well before the last.
+ */
+export const REFRESH_AFTER_COMMAND_MS = [2000, 8000, 20_000, 40_000]

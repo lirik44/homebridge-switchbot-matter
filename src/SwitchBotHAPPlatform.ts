@@ -3,7 +3,7 @@ import type { API, Logger, PlatformConfig } from 'homebridge'
 import type { SwitchBotPluginConfig } from './settings.js'
 
 import { createDevice } from './deviceFactory.js'
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
+import { PLATFORM_NAME, PLUGIN_NAME, REFRESH_AFTER_COMMAND_MS } from './settings.js'
 import { SwitchBotClient } from './switchbotClient.js'
 import { collectConfiguredDevices, normalizeTypeForMatter } from './utils.js'
 
@@ -50,6 +50,14 @@ export class SwitchBotHAPPlatform {
   private openApiRequestsToday = 0
   /** Timestamp (ms) of last OpenAPI daily counter reset */
   private openApiLastReset = 0
+  /** The characteristics to keep in step with their devices, by accessory UUID */
+  private synced: Map<string, { device: any, characteristics: { name: string, characteristic: any, get: () => Promise<any> }[] }> = new Map()
+  /** The value last pushed per characteristic, so an unchanged read pushes nothing */
+  private pushed: Map<string, any> = new Map()
+  /** Timer for the periodic push */
+  private stateSyncInterval: NodeJS.Timeout | null = null
+  /** Timers for the reads that follow a command */
+  private refreshTimers: Map<string, NodeJS.Timeout[]> = new Map()
 
   /**
    * Construct the SwitchBot HAP platform.
@@ -262,6 +270,7 @@ export class SwitchBotHAPPlatform {
           // ignore
         }
         // Add basic service descriptor from device (symmetrical to Matter: remove stale services/chars)
+        const watched: { name: string, characteristic: any, get: () => Promise<any> }[] = []
         const accDesc = await created.createAccessory?.(this.api)
         if (accDesc && accDesc.services) {
           const serviceTypes = accDesc.services.map((s: any) => s.type)
@@ -300,6 +309,7 @@ export class SwitchBotHAPPlatform {
               }
               if (getterSetter && typeof getterSetter.get === 'function') {
                 service.getCharacteristic(Characteristic).onGet(getterSetter.get)
+                watched.push({ name: charName, characteristic: service.getCharacteristic(Characteristic), get: getterSetter.get })
               }
               if (getterSetter && typeof getterSetter.set === 'function') {
                 service.getCharacteristic(Characteristic).onSet(async (value: any) => {
@@ -326,6 +336,9 @@ export class SwitchBotHAPPlatform {
             }
           }
         }
+        if (watched.length > 0) {
+          this.synced.set(accessory.UUID ?? uuid, { device: created.instance, characteristics: watched })
+        }
         this.log.info(`Created/updated HAP accessory ${d.id} (${type})`)
       } catch (e) {
         this.log.warn('HAP accessory creation failed', e)
@@ -340,6 +353,118 @@ export class SwitchBotHAPPlatform {
       }
     } else {
       this.log.info('No HAP accessories to register')
+    }
+
+    this._startStateSync()
+  }
+
+  /**
+   * Keeps the HomeKit characteristics in step with the devices.
+   *
+   * HomeKit reads a characteristic when it wants one, which makes a plugin look live as long as
+   * nothing else can change the device. Something else can: the same devices are published over
+   * Matter, and a light switched off in another ecosystem leaves Apple Home showing it on until
+   * HomeKit happens to ask again. So the values are pushed, the way the Matter half pushes them.
+   *
+   * @returns {void}
+   */
+  private _startStateSync(): void {
+    if (this.stateSyncInterval) {
+      clearInterval(this.stateSyncInterval)
+      this.stateSyncInterval = null
+    }
+    if (this.synced.size === 0) {
+      return
+    }
+
+    const seconds = Math.max(Number((this.config as any).hapStateSyncSeconds) || 60, 15)
+    for (const [uuid, entry] of this.synced.entries()) {
+      this._watchCommands(uuid, entry.device)
+    }
+
+    this.stateSyncInterval = setInterval(() => void this._syncAllState(), seconds * 1000)
+    void this._syncAllState()
+    this.log.info(`Keeping HomeKit characteristics in step with ${this.synced.size} device(s), every ${seconds}s`)
+  }
+
+  /**
+   * Reads an accessory back after it has been commanded - from HomeKit, or from a Matter
+   * controller, which reaches the device without HomeKit hearing about it.
+   *
+   * @param {string} uuid The accessory UUID.
+   * @param {any} device The device instance, shared with the Matter platform.
+   * @returns {void}
+   */
+  private _watchCommands(uuid: string, device: any): void {
+    if (!device || device._hapSyncHooked) {
+      return
+    }
+
+    for (const method of ['setState', 'noteCommandedState'] as const) {
+      if (typeof device[method] !== 'function') {
+        continue
+      }
+      const original = device[method].bind(device)
+      device[method] = (...args: any[]) => {
+        const result = original(...args)
+        this._refreshAfterCommand(uuid)
+        return result
+      }
+    }
+    device._hapSyncHooked = true
+  }
+
+  /**
+   * @param {string} uuid The accessory that was commanded.
+   * @returns {void}
+   */
+  private _refreshAfterCommand(uuid: string): void {
+    for (const timer of this.refreshTimers.get(uuid) ?? []) {
+      clearTimeout(timer)
+    }
+    this.refreshTimers.set(
+      uuid,
+      REFRESH_AFTER_COMMAND_MS.map(delay => setTimeout(() => void this._syncState(uuid), delay)),
+    )
+  }
+
+  /**
+   * @returns {Promise<void>} Resolves once every accessory has been pushed.
+   */
+  private async _syncAllState(): Promise<void> {
+    for (const uuid of this.synced.keys()) {
+      await this._syncState(uuid)
+    }
+  }
+
+  /**
+   * @param {string} uuid The accessory to push.
+   * @returns {Promise<void>} Resolves once its characteristics are up to date.
+   */
+  private async _syncState(uuid: string): Promise<void> {
+    const entry = this.synced.get(uuid)
+    if (!entry) {
+      return
+    }
+
+    for (const { name, characteristic, get } of entry.characteristics) {
+      try {
+        const value = await get()
+        if (value === undefined || value === null) {
+          continue
+        }
+
+        const key = `${uuid}:${name}`
+        if (this.pushed.get(key) === value) {
+          continue
+        }
+
+        this.pushed.set(key, value)
+        characteristic.updateValue(value)
+        this.log.debug(`[HAP] ${uuid}: ${name} = ${value}`)
+      } catch (e) {
+        this.log.debug(`[HAP] Could not read ${name} of ${uuid}:`, (e as Error)?.message)
+      }
     }
   }
 
@@ -424,6 +549,16 @@ export class SwitchBotHAPPlatform {
    * @returns {void}
    */
   shutdown(): void {
+    if (this.stateSyncInterval) {
+      clearInterval(this.stateSyncInterval)
+      this.stateSyncInterval = null
+    }
+    for (const timers of this.refreshTimers.values()) {
+      for (const timer of timers) {
+        clearTimeout(timer)
+      }
+    }
+    this.refreshTimers.clear()
     if (this.configReloadInterval) {
       clearInterval(this.configReloadInterval)
       this.configReloadInterval = null

@@ -3,15 +3,9 @@ import type { API, Logger, PlatformConfig } from 'homebridge'
 import type { SwitchBotPluginConfig } from './settings.js'
 
 import { createDevice } from './deviceFactory.js'
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
+import { PLATFORM_NAME, PLUGIN_NAME, REFRESH_AFTER_COMMAND_MS } from './settings.js'
 import { SwitchBotClient } from './switchbotClient.js'
 import { collectConfiguredDevices, commandedStateFor, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
-
-/**
- * When an accessory is read back after being commanded. A curtain is still on its way for the
- * first of these, and settled well before the last.
- */
-const REFRESH_AFTER_COMMAND_MS = [2000, 8000, 20_000, 40_000]
 
 /**
  * Homebridge platform class for SwitchBot Matter integration.

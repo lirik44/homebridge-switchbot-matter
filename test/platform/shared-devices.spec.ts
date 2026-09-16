@@ -10,9 +10,61 @@ const log = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), log:
 function fakeApi() {
   const listeners: Record<string, (() => void)[]> = {}
   const updates: { uuid: string, cluster: string, attributes: any }[] = []
+  const characteristics: any[] = []
+
+  function characteristic(name: string) {
+    const existing = characteristics.find(c => c.name === name)
+    if (existing) {
+      return existing
+    }
+    const created = {
+      name,
+      displayName: name,
+      onGet: vi.fn(function (this: any) {
+        return this
+      }),
+      onSet: vi.fn(function (this: any) {
+        return this
+      }),
+      setProps: vi.fn(),
+      updateValue: vi.fn(),
+    }
+    characteristics.push(created)
+    return created
+  }
+
+  function service(name: string) {
+    return { name, constructor: { name }, characteristics: [], getCharacteristic: (c: string) => characteristic(c), setCharacteristic: () => {} }
+  }
+
+  const hap = {
+    uuid: { generate: (id: string) => `uuid-${id}` },
+    Service: new Proxy({}, { get: (_t, name: string) => name }),
+    Characteristic: new Proxy({}, { get: (_t, name: string) => name }),
+  }
+
+  class FakeAccessory {
+    services: any[] = []
+    context: any = {}
+    constructor(public displayName: string, public UUID: string) {}
+    getService(name: string) {
+      return this.services.find(s => s.name === name)
+    }
+
+    addService(name: string) {
+      const added = service(name)
+      this.services.push(added)
+      return added
+    }
+
+    removeService(target: any) {
+      this.services = this.services.filter(s => s !== target)
+    }
+  }
 
   return {
     updates,
+    characteristics,
     launch: async () => {
       for (const listener of listeners.didFinishLaunching ?? []) {
         await listener()
@@ -24,7 +76,9 @@ function fakeApi() {
     user: { storagePath: () => undefined },
     isMatterAvailable: () => true,
     isMatterEnabled: () => true,
-    hap: { uuid: { generate: (id: string) => `uuid-${id}` } },
+    hap,
+    platformAccessory: FakeAccessory,
+    registerPlatformAccessories: () => {},
     matter: {
       uuid: { generate: (id: string) => `uuid-${id}` },
       deviceTypes: {},
@@ -79,6 +133,24 @@ describe('both halves of the plugin', () => {
       () => expect(api.updates.at(-1)).toStrictEqual({ uuid: 'uuid-IR1', cluster: 'onOff', attributes: { onOff: true } }),
       { timeout: 6000, interval: 100 },
     )
+
+    platform.shutdown()
+  })
+
+  it('tells HomeKit about a command that came from the other ecosystem', async () => {
+    const Proxy = createPlatformProxy(SwitchBotHAPPlatform, SwitchBotMatterPlatform)
+    const api = fakeApi()
+    const platform: any = new Proxy(log, CONFIG, api)
+    await api.launch()
+
+    const device = platform.hap.devices.find((d: any) => d.instance?.opts?.id === 'IR1')!.instance
+    const on = api.characteristics.find((c: any) => c.name === 'On')
+    expect(on).toBeDefined()
+
+    // What a Matter controller's command leaves behind: the device knows, HomeKit does not.
+    device.noteCommandedState({ on: true })
+
+    await vi.waitFor(() => expect(on.updateValue).toHaveBeenCalledWith(true), { timeout: 6000, interval: 100 })
 
     platform.shutdown()
   })
