@@ -1613,3 +1613,37 @@ export function snapCurtainPosition(position: number): number {
   }
   return clamped
 }
+
+/**
+ * Tells whether a command is the plugin's own state update coming back at it.
+ *
+ * Reporting an attribute can reach the accessory's handlers as though a controller had commanded
+ * it. Acting on that means pressing an infrared remote nobody touched, and recording a state
+ * nobody asked for - the two halves of the plugin then take turns telling each other the value
+ * they were each told a moment ago, and a garland flickers between on and off.
+ *
+ * @param {Record<string, any> | undefined} published The attributes last reported for the cluster.
+ * @param {Record<string, any>} change What the command asks for.
+ * @returns {boolean} Whether the two say the same thing.
+ */
+export function echoesPublishedState(published: Record<string, any> | undefined, change: Record<string, any>): boolean {
+  if (!published) {
+    return false
+  }
+
+  if (typeof change.on === 'boolean') {
+    return published.onOff === change.on
+  }
+
+  if (typeof change.brightness === 'number') {
+    return typeof published.currentLevel === 'number'
+      && Math.round(published.currentLevel / 2.54) === change.brightness
+  }
+
+  if (typeof change.position === 'number') {
+    return typeof published.targetPositionLiftPercent100ths === 'number'
+      && Math.round(published.targetPositionLiftPercent100ths / 100) === change.position
+  }
+
+  return false
+}

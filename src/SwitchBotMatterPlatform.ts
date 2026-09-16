@@ -5,7 +5,10 @@ import type { SwitchBotPluginConfig } from './settings.js'
 import { createDevice } from './deviceFactory.js'
 import { PLATFORM_NAME, PLUGIN_NAME, REFRESH_AFTER_COMMAND_MS } from './settings.js'
 import { SwitchBotClient } from './switchbotClient.js'
-import { collectConfiguredDevices, commandedStateFor, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
+import { collectConfiguredDevices, commandedStateFor, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, echoesPublishedState, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
+
+/** How long after reporting a value a command carrying it is taken for an echo of the report. */
+const ECHO_WINDOW_MS = 5000
 
 /**
  * Homebridge platform class for SwitchBot Matter integration.
@@ -54,6 +57,8 @@ export class SwitchBotMatterPlatform {
   private synced: Map<string, { device: any, type: string, deviceId: string, hap?: any }> = new Map()
   /** The attributes last published per accessory and cluster, so an unchanged poll writes nothing */
   private published: Map<string, string> = new Map()
+  /** When each of those was published, to recognise one coming back as a command */
+  private publishedAt: Map<string, number> = new Map()
   /** Timer for the periodic state sync */
   private stateSyncInterval: NodeJS.Timeout | null = null
   /** Timers for the refreshes that follow a command */
@@ -369,13 +374,18 @@ export class SwitchBotMatterPlatform {
       for (const [name, handler] of Object.entries(commands as Record<string, any>)) {
         watchedCommands[name] = typeof handler === 'function'
           ? async (...args: any[]) => {
+            const change = commandedStateFor(cluster, name, args[0])
+            if (change && this._echoesOurUpdate(uuid, cluster, change)) {
+              // Reporting a value can reach these handlers as though someone had commanded it.
+              this.log.debug(`[Matter] ${uuid}: ignoring ${cluster}.${name}, it is the value this plugin just reported`)
+              return { success: true }
+            }
+
+            this.log.info(`[Matter] ${uuid}: ${cluster}.${name}${change ? ` (${JSON.stringify(change)})` : ''}`)
             const result = await handler(...args)
-            if (result?.success !== false) {
+            if (result?.success !== false && change) {
               // The device object never saw this command, so tell it what was asked for.
-              const change = commandedStateFor(cluster, name, args[0])
-              if (change) {
-                this.synced.get(uuid)?.device?.noteCommandedState?.(change)
-              }
+              this.synced.get(uuid)?.device?.noteCommandedState?.(change)
             }
             this._refreshAfterCommand(uuid)
             return result
@@ -385,6 +395,27 @@ export class SwitchBotMatterPlatform {
       watched[cluster] = watchedCommands
     }
     return watched
+  }
+
+  /**
+   * @param {string} uuid The accessory commanded.
+   * @param {string} cluster The cluster commanded.
+   * @param {Record<string, any>} change What the command asks for.
+   * @returns {boolean} Whether this is the value this plugin reported a moment ago, rather than
+   * something a person did.
+   */
+  private _echoesOurUpdate(uuid: string, cluster: string, change: Record<string, any>): boolean {
+    const key = `${uuid}:${cluster}`
+    const publishedAt = this.publishedAt.get(key) ?? 0
+    if (Date.now() - publishedAt > ECHO_WINDOW_MS) {
+      return false
+    }
+
+    try {
+      return echoesPublishedState(JSON.parse(this.published.get(key) ?? 'null'), change)
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -456,6 +487,7 @@ export class SwitchBotMatterPlatform {
 
         await matterApi.updateAccessoryState(uuid, cluster, attributes)
         this.published.set(key, payload)
+        this.publishedAt.set(key, Date.now())
         // A change is an event, not a poll: worth a line without turning on debug logging.
         this.log.info(`[Matter] ${entry.type} ${uuid}: ${cluster} = ${payload}`)
       }

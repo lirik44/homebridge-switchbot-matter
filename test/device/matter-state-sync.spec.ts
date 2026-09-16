@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { commandedStateFor, matterStateFor, matterStateFromHap, snapCurtainPosition, stateFromApiStatus } from '../../src/utils'
+import { commandedStateFor, echoesPublishedState, matterStateFor, matterStateFromHap, snapCurtainPosition, stateFromApiStatus } from '../../src/utils'
 
 describe('matterStateFor', () => {
   // HomeKit asks for a value whenever it wants one; a Matter controller reads its own cached copy
@@ -199,5 +199,27 @@ describe('snapCurtainPosition', () => {
   it('keeps the position in range', () => {
     expect(snapCurtainPosition(140)).toBe(100)
     expect(snapCurtainPosition(-5)).toBe(0)
+  })
+})
+
+describe('echoesPublishedState', () => {
+  // Reporting a value can reach the accessory's handlers as though a controller had commanded it,
+  // and acting on that has the two halves of the plugin echoing each other for ever.
+
+  it('recognises the value just reported', () => {
+    expect(echoesPublishedState({ onOff: true }, { on: true })).toBe(true)
+    expect(echoesPublishedState({ currentLevel: 254 }, { brightness: 100 })).toBe(true)
+    expect(echoesPublishedState({ targetPositionLiftPercent100ths: 2500 }, { position: 25 })).toBe(true)
+  })
+
+  it('lets a real command through', () => {
+    expect(echoesPublishedState({ onOff: true }, { on: false })).toBe(false)
+    expect(echoesPublishedState({ currentLevel: 254 }, { brightness: 40 })).toBe(false)
+    expect(echoesPublishedState({ targetPositionLiftPercent100ths: 0 }, { position: 100 })).toBe(false)
+  })
+
+  it('lets everything through when nothing has been reported', () => {
+    expect(echoesPublishedState(undefined, { on: true })).toBe(false)
+    expect(echoesPublishedState({ onOff: true }, { mode: 'auto' })).toBe(false)
   })
 })
