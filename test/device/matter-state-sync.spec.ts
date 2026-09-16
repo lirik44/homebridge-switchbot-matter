@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { commandedStateFor, matterStateFor, matterStateFromHap, stateFromApiStatus } from '../../src/utils'
+import { commandedStateFor, matterStateFor, matterStateFromHap, snapCurtainPosition, stateFromApiStatus } from '../../src/utils'
 
 describe('matterStateFor', () => {
   // HomeKit asks for a value whenever it wants one; a Matter controller reads its own cached copy
@@ -179,5 +179,25 @@ describe('commandedStateFor', () => {
     expect(commandedStateFor('onOff', 'toggle', undefined)).toBeUndefined()
     expect(commandedStateFor('rvcRunMode', 'changeToMode', { newMode: 1 })).toBeUndefined()
     expect(commandedStateFor('windowCovering', 'goToLiftPercentage', {})).toBeUndefined()
+  })
+})
+
+describe('snapCurtainPosition', () => {
+  it('rounds off a curtain that has run into its end stop', () => {
+    // The motor stops where its calibration says, not at a round number, and a curtain reported
+    // at 99 shows up as "1% open" in every app the moment after it was told to close.
+    expect(snapCurtainPosition(99)).toBe(100)
+    expect(snapCurtainPosition(1)).toBe(0)
+    expect(stateFromApiStatus({ slidePosition: 99 })).toStrictEqual({ position: 100 })
+  })
+
+  it('leaves a curtain that is genuinely part way alone', () => {
+    expect(snapCurtainPosition(35)).toBe(35)
+    expect(snapCurtainPosition(97)).toBe(97)
+  })
+
+  it('keeps the position in range', () => {
+    expect(snapCurtainPosition(140)).toBe(100)
+    expect(snapCurtainPosition(-5)).toBe(0)
   })
 })

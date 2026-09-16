@@ -1492,6 +1492,9 @@ export async function matterStateFromHap(descriptor: any): Promise<Record<string
   return Object.keys(clusters).length > 0 ? clusters : undefined
 }
 
+/** How far from either end a curtain counts as having got there. */
+const CURTAIN_END_TOLERANCE = 2
+
 /**
  * Turns a SwitchBot cloud status into the state shape the devices work in.
  *
@@ -1508,7 +1511,7 @@ export function stateFromApiStatus(status: any): Record<string, any> | undefined
 
   if (typeof status.slidePosition === 'number') {
     // The cloud counts a curtain from the open end, and so does this plugin.
-    state.position = Math.max(0, Math.min(100, Math.round(status.slidePosition)))
+    state.position = snapCurtainPosition(status.slidePosition)
   }
   if (typeof status.power === 'string') {
     state.on = status.power.toLowerCase() === 'on'
@@ -1587,4 +1590,26 @@ export function commandedStateFor(cluster: string, command: string, args: any): 
     default:
       return undefined
   }
+}
+
+/**
+ * Rounds a curtain position to the end it has reached.
+ *
+ * A curtain that has run into its end stop reports 99 rather than 100: the motor stops where the
+ * calibration says, not at a round number. Reported as it is, a closed curtain shows up as "1%
+ * open" in every app, and a controller that was just told the curtain is closed sees it reopen a
+ * minute later.
+ *
+ * @param {number} position The position the cloud reports, 0 at fully open.
+ * @returns {number} The same position, with the last couple of percent at either end rounded off.
+ */
+export function snapCurtainPosition(position: number): number {
+  const clamped = Math.max(0, Math.min(100, Math.round(position)))
+  if (clamped <= CURTAIN_END_TOLERANCE) {
+    return 0
+  }
+  if (clamped >= 100 - CURTAIN_END_TOLERANCE) {
+    return 100
+  }
+  return clamped
 }

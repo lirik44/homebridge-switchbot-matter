@@ -327,7 +327,8 @@ export class SwitchBotMatterPlatform {
 
     this.stateSyncInterval = setInterval(() => void this._syncAllState(), seconds * 1000)
     void this._syncAllState()
-    this.log.info(`Keeping Matter attributes in step with ${this.synced.size} device(s), every ${seconds}s`)
+    const followed = [...this.synced.values()].filter(entry => entry.device?._matterSyncHooked).length
+    this.log.info(`Keeping Matter attributes in step with ${this.synced.size} device(s), every ${seconds}s; following commands to ${followed} of them`)
   }
 
   /**
@@ -408,7 +409,7 @@ export class SwitchBotMatterPlatform {
    * @returns {void}
    */
   private _refreshAfterCommand(uuid: string): void {
-    this.log.debug(`[Matter] ${uuid} was commanded, reading it back`)
+    this.log.info(`[Matter] ${uuid} was commanded, reading it back`)
     for (const timer of this.refreshTimers.get(uuid) ?? []) {
       clearTimeout(timer)
     }
