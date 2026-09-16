@@ -40,3 +40,21 @@ describe('createDevice', () => {
     expect(result.instance.constructor.name).toBe('WaterDetectorDevice')
   })
 })
+
+describe('building the same device from both halves at once', () => {
+  it('builds it once, however the two requests interleave', async () => {
+    // The HAP and Matter platforms load their devices at the same time. If the register is only
+    // written after the device is built, both look, find nothing, and each gets its own object -
+    // and then each ecosystem has its own idea of what an IR remote was last told to do.
+    const log = { debug() {}, info() {}, warn() {}, error() {}, log() {} } as any
+    const cfg = { log, logger: log, _client: { getDevice: async () => undefined, getStatus: async () => undefined } } as any
+    const opts = { id: 'IR-RACE', type: 'ir light', name: 'Christmas Light', log }
+
+    const [first, second] = await Promise.all([
+      createDevice({ ...opts }, cfg, false),
+      createDevice({ ...opts }, cfg, true),
+    ])
+
+    expect(second.instance).toBe(first.instance)
+  })
+})

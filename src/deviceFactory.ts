@@ -156,13 +156,14 @@ function classForType(type: string) {
  * on through HAP stayed "off" for the Matter half, which held a different object. Keyed by the
  * shared client so a config reload, which builds a new client, starts fresh.
  */
-const DEVICE_INSTANCES = new WeakMap<object, Map<string, any>>()
+const DEVICE_INSTANCES = new WeakMap<object, Map<string, Promise<any>>>()
 
 /**
  * @param {object} client The shared SwitchBot client.
- * @returns {Map<string, any>} The instances built against that client.
+ * @returns {Map<string, Promise<any>>} The instances built against that client, each of them
+ * under way from the moment it is asked for.
  */
-function instancesFor(client: object): Map<string, any> {
+function instancesFor(client: object): Map<string, Promise<any>> {
   let instances = DEVICE_INSTANCES.get(client)
   if (!instances) {
     instances = new Map()
@@ -202,9 +203,14 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
   if (logger) {
     deviceOpts.log = logger
   }
+  // The two halves of the plugin load their devices at the same time, so the place in the
+  // register is taken before the device is built rather than after: otherwise both halves look,
+  // find nothing, and each builds its own - and then each ecosystem has its own idea of what an
+  // infrared remote, which has no state to read back, was last told to do.
   const instances = instancesFor(client)
-  const shared = instances.get(opts.id)
-  if (shared) {
+  const existing = instances.get(opts.id)
+  if (existing) {
+    const shared = await existing
     return {
       instance: shared,
       createAccessory: useMatter
@@ -214,54 +220,67 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
     }
   }
 
-  const DeviceCtor = classForType(opts.type)
-  const device = new DeviceCtor(deviceOpts, mergedCfg)
-  await device.init()
+  const creation = (async () => {
+    const DeviceCtor = classForType(opts.type)
+    const device = new DeviceCtor(deviceOpts, mergedCfg)
+    await device.init()
 
-  // Attach a simple getState delegator to the client where appropriate. An IR remote is not in
-  // discovery and has nothing to report, so it keeps the state it remembers instead.
-  const originalGetState = device.getState.bind(device)
-  device.getState = isInfraredType(opts.type)
-    ? originalGetState
-    : async () => {
-      let local: any
-      try {
-        // Prefer client-backed getDevice when available
-        local = await client.getDevice(opts.id)
-      } catch (e) {
-        // ignore and fallback to device implementation
-      }
-      if (!local) {
+    // Attach a simple getState delegator to the client where appropriate. An IR remote is not in
+    // discovery and has nothing to report, so it keeps the state it remembers instead.
+    const originalGetState = device.getState.bind(device)
+    device.getState = isInfraredType(opts.type)
+      ? originalGetState
+      : async () => {
+        let local: any
         try {
-          local = await originalGetState()
+          // Prefer client-backed getDevice when available
+          local = await client.getDevice(opts.id)
         } catch (e) {
-          // ignore; the cloud reading below may still have something
+          // ignore and fallback to device implementation
         }
+        if (!local) {
+          try {
+            local = await originalGetState()
+          } catch (e) {
+            // ignore; the cloud reading below may still have something
+          }
+        }
+
+        // A device found over BLE is something to talk to, not a reading - it carries no position
+        // and no power state. Whatever the cloud knows takes precedence over what it does not.
+        let reported: Record<string, any> | undefined
+        try {
+          if (typeof client.getStatus === 'function') {
+            reported = stateFromApiStatus(await client.getStatus(opts.id))
+          }
+        } catch (e) {
+          // ignore; a stale or missing cloud reading is not worth failing a HomeKit read over
+        }
+
+        return reported ? { ...(local ?? {}), ...reported } : local
       }
 
-      // A device found over BLE is something to talk to, not a reading - it carries no position
-      // and no power state. Whatever the cloud knows takes precedence over what it does not.
-      let reported: Record<string, any> | undefined
-      try {
-        if (typeof client.getStatus === 'function') {
-          reported = stateFromApiStatus(await client.getStatus(opts.id))
-        }
-      } catch (e) {
-        // ignore; a stale or missing cloud reading is not worth failing a HomeKit read over
-      }
-
-      return reported ? { ...(local ?? {}), ...reported } : local
+    // A command sent from either half of the plugin is a change both halves need to hear about.
+    const originalSetState = device.setState.bind(device)
+    device.setState = async (change: any) => {
+      const result = await originalSetState(change)
+      device.notifyStateChanged?.()
+      return result
     }
 
-  // A command sent from either half of the plugin is a change both halves need to hear about.
-  const originalSetState = device.setState.bind(device)
-  device.setState = async (change: any) => {
-    const result = await originalSetState(change)
-    device.notifyStateChanged?.()
-    return result
-  }
+    return device
+  })()
 
-  instances.set(opts.id, device)
+  instances.set(opts.id, creation)
+
+  let device: any
+  try {
+    device = await creation
+  } catch (e) {
+    // A device that could not be built must not stand in the way of building it again.
+    instances.delete(opts.id)
+    throw e
+  }
 
   // Provide accessory factory based on platform selection
   return {
