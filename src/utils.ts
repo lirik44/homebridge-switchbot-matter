@@ -330,6 +330,90 @@ export function collectConfiguredDevices(config: any): Array<{ id: string, name?
     .filter(device => !!device.id)
 }
 
+/**
+ * Turns a device's state into the Matter cluster attributes that describe it.
+ *
+ * HAP and Matter carry state in opposite directions: HomeKit asks the plugin for a value whenever
+ * it wants one, so a `get` handler is enough, while a Matter controller reads its own cached copy
+ * of the attribute and learns about changes only when the node reports them. Without this mapping
+ * the Matter half of the plugin keeps whatever it was registered with, and a curtain that has since
+ * been opened still reads as closed in every Matter app.
+ *
+ * @param {string} type The normalised device type.
+ * @param {any} state The state as the device reports it.
+ * @returns {Record<string, any> | undefined} Cluster attributes to publish, or undefined when the
+ * type has nothing to report.
+ */
+export function matterStateFor(type: string, state: any): Record<string, any> | undefined {
+  if (!state) {
+    return undefined
+  }
+
+  const lowerType = (type || '').toLowerCase()
+  const on = state.on === true || state.state === 'on' || state.power === 'on'
+
+  switch (lowerType) {
+    case 'ir light':
+    case 'bot':
+    case 'plug':
+    case 'relay':
+      return { onOff: { onOff: on } }
+
+    case 'light':
+    case 'lightstrip': {
+      const clusters: Record<string, any> = { onOff: { onOff: on } }
+      if (typeof state.brightness === 'number') {
+        // Matter levels run 1-254, the SwitchBot API reports percent.
+        clusters.levelControl = { currentLevel: Math.max(1, Math.min(254, Math.round(state.brightness * 2.54))) }
+      }
+      return clusters
+    }
+
+    case 'curtain':
+    case 'curtain3':
+    case 'blindtilt':
+    case 'rollershade': {
+      if (typeof state.position !== 'number') {
+        return undefined
+      }
+      // Both scales put 0 at fully open, and Matter counts in hundredths of a percent.
+      const lift = Math.max(0, Math.min(10000, Math.round(state.position * 100)))
+      return {
+        windowCovering: {
+          currentPositionLiftPercent100ths: lift,
+          targetPositionLiftPercent100ths: lift,
+        },
+      }
+    }
+
+    case 'meter':
+    case 'temperature': {
+      const clusters: Record<string, any> = {}
+      if (typeof state.temperature === 'number') {
+        // Matter reports temperature in hundredths of a degree.
+        clusters.temperatureMeasurement = { measuredValue: Math.round(state.temperature * 100) }
+      }
+      if (typeof state.humidity === 'number') {
+        clusters.relativeHumidityMeasurement = { measuredValue: Math.round(state.humidity * 100) }
+      }
+      return Object.keys(clusters).length > 0 ? clusters : undefined
+    }
+
+    case 'contact':
+      return typeof state.openState === 'string'
+        ? { booleanState: { stateValue: state.openState !== 'open' } }
+        : undefined
+
+    case 'motion':
+      return typeof state.moveDetected === 'boolean'
+        ? { occupancySensing: { occupancy: { occupied: state.moveDetected } } }
+        : undefined
+
+    default:
+      return undefined
+  }
+}
+
 export function createMatterHandlers(log: Logger, deviceId: string, type: string, client: any): any {
   const lowerType = type.toLowerCase()
 

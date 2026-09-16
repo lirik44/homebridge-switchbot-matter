@@ -147,6 +147,30 @@ function classForType(type: string) {
   return DEVICE_CLASS_MAP[key] ?? GenericDevice
 }
 
+/**
+ * One device instance per physical device, shared by the HAP and Matter platforms.
+ *
+ * With both platforms running, each used to build its own instance of the same device. That is
+ * wasteful for anything with a cache, and wrong for anything whose state lives in the plugin
+ * rather than on the device: an infrared remote has no state to read back, so a garland switched
+ * on through HAP stayed "off" for the Matter half, which held a different object. Keyed by the
+ * shared client so a config reload, which builds a new client, starts fresh.
+ */
+const DEVICE_INSTANCES = new WeakMap<object, Map<string, any>>()
+
+/**
+ * @param {object} client The shared SwitchBot client.
+ * @returns {Map<string, any>} The instances built against that client.
+ */
+function instancesFor(client: object): Map<string, any> {
+  let instances = DEVICE_INSTANCES.get(client)
+  if (!instances) {
+    instances = new Map()
+    DEVICE_INSTANCES.set(client, instances)
+  }
+  return instances
+}
+
 export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConfig, useMatter: boolean, log?: Logger) {
   // Always pass the logger to both device opts and config
   const logger = log || (cfg as any)?.logger || (cfg as any)?.log
@@ -178,6 +202,18 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
   if (logger) {
     deviceOpts.log = logger
   }
+  const instances = instancesFor(client)
+  const shared = instances.get(opts.id)
+  if (shared) {
+    return {
+      instance: shared,
+      createAccessory: useMatter
+        ? async (api: any) => await shared.createMatterAccessory(api)
+        : (api: any) => shared.createHAPAccessory(api),
+      protocol: useMatter ? 'matter' : 'hap',
+    }
+  }
+
   const DeviceCtor = classForType(opts.type)
   const device = new DeviceCtor(deviceOpts, mergedCfg)
   await device.init()
@@ -199,6 +235,8 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
       }
       return originalGetState()
     }
+
+  instances.set(opts.id, device)
 
   // Provide accessory factory based on platform selection
   return {

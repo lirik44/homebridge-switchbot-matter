@@ -5,7 +5,7 @@ import type { SwitchBotPluginConfig } from './settings.js'
 import { createDevice } from './deviceFactory.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
 import { SwitchBotClient } from './switchbotClient.js'
-import { collectConfiguredDevices, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
+import { collectConfiguredDevices, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
 
 /**
  * Homebridge platform class for SwitchBot Matter integration.
@@ -50,6 +50,14 @@ export class SwitchBotMatterPlatform {
   private openApiRequestsToday = 0
   /** Timestamp (ms) of last OpenAPI daily counter reset */
   private openApiLastReset = 0
+  /** The accessories to keep in step with their devices, by UUID */
+  private synced: Map<string, { device: any, type: string }> = new Map()
+  /** The attributes last published per accessory and cluster, so an unchanged poll writes nothing */
+  private published: Map<string, string> = new Map()
+  /** Timer for the periodic state sync */
+  private stateSyncInterval: NodeJS.Timeout | null = null
+  /** Timers for the refresh that follows a command */
+  private refreshTimers: Map<string, NodeJS.Timeout> = new Map()
 
   /**
    * Construct the SwitchBot Matter platform.
@@ -260,6 +268,7 @@ export class SwitchBotMatterPlatform {
           accessoriesToRegister.push(accessory)
           this.accessories.set(accessory.UUID || uuid, accessory)
         }
+        this.synced.set(accessory.UUID ?? uuid, { device: created.instance, type })
         this.log.info(`Created/updated Matter accessory ${d.id} (${type})`)
       } catch (e) {
         this.log.warn(`Matter accessory creation failed for ${d.id} (${type})`, e)
@@ -274,6 +283,107 @@ export class SwitchBotMatterPlatform {
       }
     } else {
       this.log.info('No Matter accessories to register')
+    }
+
+    this._startStateSync()
+  }
+
+  /**
+   * Keeps the Matter attributes in step with the devices.
+   *
+   * A Matter controller reads its own cached copy of an attribute and is told about changes only
+   * when the node reports them - unlike HomeKit, which asks for a value whenever it wants one. So
+   * the state has to be pushed, or every Matter app keeps showing whatever the accessory was
+   * registered with: curtains frozen at the position they had at startup, a light stuck off.
+   *
+   * @returns {void}
+   */
+  private _startStateSync(): void {
+    if (this.stateSyncInterval) {
+      clearInterval(this.stateSyncInterval)
+      this.stateSyncInterval = null
+    }
+    if (this.synced.size === 0) {
+      return
+    }
+
+    const cfg = this.config as any
+    const seconds = Math.max(Number(cfg.matterStateSyncSeconds) || 60, 15)
+
+    // A command is answered by a refresh straight away; the interval is for everything else -
+    // a curtain pulled by hand, or the SwitchBot app.
+    for (const [uuid, entry] of this.synced.entries()) {
+      this._watchCommands(uuid, entry.device)
+    }
+
+    this.stateSyncInterval = setInterval(() => void this._syncAllState(), seconds * 1000)
+    void this._syncAllState()
+    this.log.info(`Keeping Matter attributes in step with ${this.synced.size} device(s), every ${seconds}s`)
+  }
+
+  /**
+   * Refreshes an accessory shortly after a command, so a controller sees the result of its own
+   * action without waiting for the next sync.
+   *
+   * @param {string} uuid The accessory UUID.
+   * @param {any} device The device instance, shared with the HAP platform.
+   * @returns {void}
+   */
+  private _watchCommands(uuid: string, device: any): void {
+    if (!device || typeof device.setState !== 'function' || device._matterSyncHooked) {
+      return
+    }
+
+    const original = device.setState.bind(device)
+    device.setState = async (change: any) => {
+      const result = await original(change)
+      clearTimeout(this.refreshTimers.get(uuid))
+      this.refreshTimers.set(uuid, setTimeout(() => void this._syncState(uuid), 1500))
+      return result
+    }
+    device._matterSyncHooked = true
+  }
+
+  /**
+   * @returns {Promise<void>} Resolves once every accessory has been brought up to date.
+   */
+  private async _syncAllState(): Promise<void> {
+    for (const uuid of this.synced.keys()) {
+      await this._syncState(uuid)
+    }
+  }
+
+  /**
+   * @param {string} uuid The accessory to bring up to date.
+   * @returns {Promise<void>} Resolves once its attributes have been published.
+   */
+  private async _syncState(uuid: string): Promise<void> {
+    const entry = this.synced.get(uuid)
+    const matterApi = (this.api as any)?.matter
+    if (!entry || !matterApi || typeof matterApi.updateAccessoryState !== 'function') {
+      return
+    }
+
+    try {
+      const clusters = matterStateFor(entry.type, await entry.device.getState())
+      if (!clusters) {
+        return
+      }
+
+      for (const [cluster, attributes] of Object.entries(clusters)) {
+        const key = `${uuid}:${cluster}`
+        const payload = JSON.stringify(attributes)
+        if (this.published.get(key) === payload) {
+          continue
+        }
+
+        await matterApi.updateAccessoryState(uuid, cluster, attributes)
+        this.published.set(key, payload)
+        this.log.debug(`[Matter] ${entry.type} ${uuid}: ${cluster} = ${payload}`)
+      }
+    } catch (e) {
+      // A device that cannot be read right now is reported again on the next sync.
+      this.log.debug(`[Matter] Could not sync ${uuid}:`, (e as Error)?.message)
     }
   }
 
@@ -358,6 +468,14 @@ export class SwitchBotMatterPlatform {
    * @returns {void}
    */
   shutdown(): void {
+    if (this.stateSyncInterval) {
+      clearInterval(this.stateSyncInterval)
+      this.stateSyncInterval = null
+    }
+    for (const timer of this.refreshTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.refreshTimers.clear()
     if (this.configReloadInterval) {
       clearInterval(this.configReloadInterval)
       this.configReloadInterval = null
