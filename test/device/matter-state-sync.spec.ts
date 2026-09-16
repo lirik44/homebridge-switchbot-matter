@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { matterStateFor, matterStateFromHap, stateFromApiStatus } from '../../src/utils'
+import { commandedStateFor, matterStateFor, matterStateFromHap, stateFromApiStatus } from '../../src/utils'
 
 describe('matterStateFor', () => {
   // HomeKit asks for a value whenever it wants one; a Matter controller reads its own cached copy
@@ -151,5 +151,33 @@ describe('stateFromApiStatus', () => {
   it('reports nothing for a status with nothing this plugin reads', () => {
     expect(stateFromApiStatus({ deviceId: 'D1', deviceType: 'Hub 2', version: '1.2' })).toBeUndefined()
     expect(stateFromApiStatus(undefined)).toBeUndefined()
+  })
+})
+
+describe('commandedStateFor', () => {
+  // A Matter controller's commands reach the cloud without passing through the device object, so
+  // this is how the plugin hears about them - and stops reporting the old state back.
+
+  it('reads an on/off command', () => {
+    expect(commandedStateFor('onOff', 'on', undefined)).toStrictEqual({ on: true })
+    expect(commandedStateFor('onOff', 'off', undefined)).toStrictEqual({ on: false })
+  })
+
+  it('reads a covering command in the scale the plugin works in', () => {
+    expect(commandedStateFor('windowCovering', 'upOrOpen', undefined)).toStrictEqual({ position: 0 })
+    expect(commandedStateFor('windowCovering', 'downOrClose', undefined)).toStrictEqual({ position: 100 })
+    expect(commandedStateFor('windowCovering', 'goToLiftPercentage', { request: { liftPercent100thsValue: 2500 } }))
+      .toStrictEqual({ position: 25 })
+  })
+
+  it('reads a level as a percentage', () => {
+    expect(commandedStateFor('levelControl', 'moveToLevel', { request: { level: 254 } })).toStrictEqual({ brightness: 100 })
+    expect(commandedStateFor('levelControl', 'moveToLevelWithOnOff', { level: 127 })).toStrictEqual({ brightness: 50 })
+  })
+
+  it('records nothing for a command it cannot read', () => {
+    expect(commandedStateFor('onOff', 'toggle', undefined)).toBeUndefined()
+    expect(commandedStateFor('rvcRunMode', 'changeToMode', { newMode: 1 })).toBeUndefined()
+    expect(commandedStateFor('windowCovering', 'goToLiftPercentage', {})).toBeUndefined()
   })
 })

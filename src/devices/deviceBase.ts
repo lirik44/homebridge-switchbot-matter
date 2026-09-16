@@ -30,6 +30,21 @@ export abstract class DeviceBase {
   abstract setState(change: any): Promise<any>
 
   /**
+   * Records a change someone else made, without sending anything to the device.
+   *
+   * A Matter controller's commands reach the SwitchBot cloud without passing through this object,
+   * so unless it is told, the plugin goes on believing the old state and reports it back - which
+   * is how a light turned on in one app turns itself off again a few seconds later.
+   *
+   * @param {Record<string, any>} change What the controller asked for.
+   * @returns {void}
+   */
+  noteCommandedState(change: Record<string, any>): void {
+    // Nothing to record for a device that is read back from the cloud anyway.
+    void change
+  }
+
+  /**
    * Create and return a HAP accessory descriptor.
    *
    * This method returns a descriptor object (not a platformAccessory instance).

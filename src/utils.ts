@@ -1534,3 +1534,57 @@ export function stateFromApiStatus(status: any): Record<string, any> | undefined
 
   return Object.keys(state).length > 0 ? state : undefined
 }
+
+/**
+ * Works out what a Matter command asked for, so the plugin can record it.
+ *
+ * The handlers a Matter controller calls talk to the SwitchBot cloud directly, so this is how the
+ * device object - the one HomeKit reads through - hears about it.
+ *
+ * @param {string} cluster The cluster the command belongs to.
+ * @param {string} command The command name.
+ * @param {any} args The command's arguments, as the controller sent them.
+ * @returns {Record<string, any> | undefined} The change to record, if it is one this plugin
+ * tracks.
+ */
+export function commandedStateFor(cluster: string, command: string, args: any): Record<string, any> | undefined {
+  const request = args?.request ?? args
+
+  switch (cluster) {
+    case 'onOff':
+      if (command === 'on') {
+        return { on: true }
+      }
+      if (command === 'off') {
+        return { on: false }
+      }
+      return undefined
+
+    case 'levelControl': {
+      const level = request?.level
+      if ((command === 'moveToLevel' || command === 'moveToLevelWithOnOff') && typeof level === 'number') {
+        // Matter levels run 1-254, this plugin works in percent.
+        return { brightness: Math.max(0, Math.min(100, Math.round(level / 2.54))) }
+      }
+      return undefined
+    }
+
+    case 'windowCovering': {
+      // Both scales put 0 at fully open.
+      if (command === 'upOrOpen') {
+        return { position: 0 }
+      }
+      if (command === 'downOrClose') {
+        return { position: 100 }
+      }
+      const lift = request?.liftPercent100thsValue
+      if (command === 'goToLiftPercentage' && typeof lift === 'number') {
+        return { position: Math.max(0, Math.min(100, Math.round(lift / 100))) }
+      }
+      return undefined
+    }
+
+    default:
+      return undefined
+  }
+}

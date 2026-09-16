@@ -53,7 +53,7 @@ export class IRDevice extends DeviceBase {
    * @param {boolean} on What the remote was just told to do.
    * @returns {void}
    */
-  private remember(on: boolean): void {
+  protected remember(on: boolean): void {
     if (!this.stateFile) {
       return
     }
@@ -68,6 +68,13 @@ export class IRDevice extends DeviceBase {
 
   async getState(): Promise<any> {
     return { id: this.opts.id, type: this.opts.type, on: this.on }
+  }
+
+  noteCommandedState(change: Record<string, any>): void {
+    if (typeof change?.on === 'boolean') {
+      this.on = change.on
+      this.remember(change.on)
+    }
   }
 
   async setState(change: any): Promise<any> {

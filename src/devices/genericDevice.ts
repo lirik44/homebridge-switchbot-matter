@@ -515,6 +515,20 @@ export class CurtainDevice extends GenericDevice {
     return this.lastKnownPosition
   }
 
+  noteCommandedState(change: Record<string, any>): void {
+    if (typeof change?.position !== 'number') {
+      return
+    }
+    // The value is in the SwitchBot scale, which runs the other way from HomeKit's.
+    const position = this.toHomeKitPosition(change.position)
+    this.lastKnownPosition = position
+    this.lastTargetPosition = position
+    this.positionState = 2
+    // A curtain takes a while to travel, and a reading taken in the meantime shows where it set
+    // off from, so believe the command until it has had time to arrive.
+    this.preferLocalPositionUntil = Date.now() + 30000
+  }
+
   createHAPAccessory(api: any) {
     return {
       services: [

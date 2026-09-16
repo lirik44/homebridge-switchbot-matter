@@ -176,3 +176,16 @@ describe('remembering what the remote was told', () => {
     await expect(device.getState()).resolves.toEqual(expect.objectContaining({ on: true }))
   })
 })
+
+describe('a command that came from a Matter controller', () => {
+  it('is recorded, so the remote is not reported off a moment later', async () => {
+    const client = { sendIRCommand: vi.fn(async () => ({ statusCode: 100 })) }
+    const device = createDevice(client)
+
+    // The Matter handlers talk to the cloud themselves; this is all the device is told.
+    device.noteCommandedState({ on: true })
+
+    await expect(device.getState()).resolves.toEqual(expect.objectContaining({ on: true }))
+    expect(client.sendIRCommand).not.toHaveBeenCalled()
+  })
+})

@@ -5,7 +5,7 @@ import type { SwitchBotPluginConfig } from './settings.js'
 import { createDevice } from './deviceFactory.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
 import { SwitchBotClient } from './switchbotClient.js'
-import { collectConfiguredDevices, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
+import { collectConfiguredDevices, commandedStateFor, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
 
 /**
  * When an accessory is read back after being commanded. A curtain is still on its way for the
@@ -381,6 +381,13 @@ export class SwitchBotMatterPlatform {
         watchedCommands[name] = typeof handler === 'function'
           ? async (...args: any[]) => {
             const result = await handler(...args)
+            if (result?.success !== false) {
+              // The device object never saw this command, so tell it what was asked for.
+              const change = commandedStateFor(cluster, name, args[0])
+              if (change) {
+                this.synced.get(uuid)?.device?.noteCommandedState?.(change)
+              }
+            }
             this._refreshAfterCommand(uuid)
             return result
           }
