@@ -22,8 +22,6 @@ export class IRDevice extends DeviceBase {
   protected on: boolean
   /** Where that is kept, so a restart does not claim the lights went off. */
   private readonly stateFile: string | undefined
-  /** Tells one device object from another in the log, when there should only ever be one. */
-  private readonly tag = Math.random().toString(36).slice(2, 6)
 
   constructor(opts: DeviceOptions, cfg: SwitchBotPluginConfig) {
     super(opts, cfg)
@@ -34,7 +32,6 @@ export class IRDevice extends DeviceBase {
     const storagePath = (opts as any)?.storagePath ?? (cfg as any)?.storagePath
     this.stateFile = typeof storagePath === 'string' ? join(storagePath, 'switchbot-ir-state.json') : undefined
     this.on = this.readRemembered() ?? (opts as any)?.initialState === true
-    this.log.info(`[${this.opts.id}#${this.tag}] Built, remembering it as ${this.on ? 'on' : 'off'}`)
   }
 
   /**
@@ -44,7 +41,7 @@ export class IRDevice extends DeviceBase {
    */
   private record(on: boolean, reason: string): void {
     if (this.on !== on) {
-      this.log.info(`[${this.opts.id}#${this.tag}] Now ${on ? 'on' : 'off'}, ${reason}`)
+      this.log.info(`[${this.opts.id}] Now ${on ? 'on' : 'off'}, ${reason}`)
     }
     this.on = on
     this.remember(on)

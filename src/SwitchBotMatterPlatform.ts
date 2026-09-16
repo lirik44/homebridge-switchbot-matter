@@ -381,7 +381,7 @@ export class SwitchBotMatterPlatform {
               return { success: true }
             }
 
-            this.log.info(`[Matter] ${uuid}: ${cluster}.${name}${change ? ` (${JSON.stringify(change)})` : ''}`)
+            this.log.debug(`[Matter] ${uuid}: ${cluster}.${name}${change ? ` (${JSON.stringify(change)})` : ''}`)
             const result = await handler(...args)
             if (result?.success !== false && change) {
               // The device object never saw this command, so tell it what was asked for.
@@ -428,7 +428,7 @@ export class SwitchBotMatterPlatform {
    * @returns {void}
    */
   private _refreshAfterCommand(uuid: string): void {
-    this.log.info(`[Matter] ${uuid} was commanded, reading it back`)
+    this.log.debug(`[Matter] ${uuid} was commanded, reading it back`)
     for (const timer of this.refreshTimers.get(uuid) ?? []) {
       clearTimeout(timer)
     }
