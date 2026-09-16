@@ -253,6 +253,14 @@ export async function createDevice(opts: DeviceOptions, cfg: SwitchBotPluginConf
       return reported ? { ...(local ?? {}), ...reported } : local
     }
 
+  // A command sent from either half of the plugin is a change both halves need to hear about.
+  const originalSetState = device.setState.bind(device)
+  device.setState = async (change: any) => {
+    const result = await originalSetState(change)
+    device.notifyStateChanged?.()
+    return result
+  }
+
   instances.set(opts.id, device)
 
   // Provide accessory factory based on platform selection

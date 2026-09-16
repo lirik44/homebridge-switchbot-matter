@@ -388,29 +388,19 @@ export class SwitchBotHAPPlatform {
   }
 
   /**
-   * Reads an accessory back after it has been commanded - from HomeKit, or from a Matter
-   * controller, which reaches the device without HomeKit hearing about it.
+   * Listens to a device, so a change made anywhere - including in another ecosystem - reaches
+   * HomeKit.
    *
    * @param {string} uuid The accessory UUID.
    * @param {any} device The device instance, shared with the Matter platform.
    * @returns {void}
    */
   private _watchCommands(uuid: string, device: any): void {
-    if (!device || device._hapSyncHooked) {
+    if (typeof device?.onStateChanged !== 'function' || device._hapSyncHooked) {
       return
     }
 
-    for (const method of ['setState', 'noteCommandedState'] as const) {
-      if (typeof device[method] !== 'function') {
-        continue
-      }
-      const original = device[method].bind(device)
-      device[method] = (...args: any[]) => {
-        const result = original(...args)
-        this._refreshAfterCommand(uuid)
-        return result
-      }
-    }
+    device.onStateChanged(() => this._refreshAfterCommand(uuid))
     device._hapSyncHooked = true
   }
 

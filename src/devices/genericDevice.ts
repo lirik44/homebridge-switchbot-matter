@@ -484,6 +484,8 @@ export class BotDevice extends GenericDevice {}
 
 export class CurtainDevice extends GenericDevice {
   private lastKnownPosition = 0
+  /** Whether the position above was ever read, rather than the number this object started with. */
+  private positionKnown = false
   private lastTargetPosition = 0
   private positionState = 2
   private preferLocalPositionUntil = 0
@@ -504,13 +506,22 @@ export class CurtainDevice extends GenericDevice {
     if (Date.now() < this.preferLocalPositionUntil) {
       return this.lastKnownPosition
     }
-    const state = await Promise.race([
-      this.getState(),
-      new Promise(resolve => setTimeout(resolve, 1000)),
-    ])
+
+    // Giving up on the read and answering from memory is only safe once there is a memory. Until
+    // then the answer would be the number this object was built with - a closed curtain - and a
+    // controller told that, then told the real position a second later, shows a curtain moving
+    // that never moved.
+    const state = this.positionKnown
+      ? await Promise.race([
+          this.getState(),
+          new Promise(resolve => setTimeout(resolve, 1000)),
+        ])
+      : await this.getState()
+
     if (typeof state?.position === 'number') {
       this.lastKnownPosition = this.toHomeKitPosition(Number(state.position))
       this.lastTargetPosition = this.lastKnownPosition
+      this.positionKnown = true
     }
     return this.lastKnownPosition
   }
@@ -523,10 +534,12 @@ export class CurtainDevice extends GenericDevice {
     const position = this.toHomeKitPosition(change.position)
     this.lastKnownPosition = position
     this.lastTargetPosition = position
+    this.positionKnown = true
     this.positionState = 2
     // A curtain takes a while to travel, and a reading taken in the meantime shows where it set
     // off from, so believe the command until it has had time to arrive.
     this.preferLocalPositionUntil = Date.now() + 30000
+    this.notifyStateChanged()
   }
 
   createHAPAccessory(api: any) {

@@ -10,6 +10,7 @@ export interface DeviceOptions {
 }
 
 export abstract class DeviceBase {
+  private readonly stateListeners = new Set<() => void>()
   protected opts: DeviceOptions
   protected cfg: SwitchBotPluginConfig
   protected client: any | null
@@ -42,6 +43,36 @@ export abstract class DeviceBase {
   noteCommandedState(change: Record<string, any>): void {
     // Nothing to record for a device that is read back from the cloud anyway.
     void change
+  }
+
+  /**
+   * Asks to be told when this device changes.
+   *
+   * One device object serves both halves of the plugin, and each half has its own ecosystem to
+   * keep informed: HomeKit reads characteristics, a Matter controller is sent attributes. Rather
+   * than each half watching the other, the device says when something happened and both listen.
+   *
+   * @param {() => void} listener What to call.
+   * @returns {() => void} How to stop listening.
+   */
+  onStateChanged(listener: () => void): () => void {
+    this.stateListeners.add(listener)
+    return () => this.stateListeners.delete(listener)
+  }
+
+  /**
+   * Says that this device has changed - because it was commanded, here or in another ecosystem.
+   *
+   * @returns {void}
+   */
+  notifyStateChanged(): void {
+    for (const listener of this.stateListeners) {
+      try {
+        listener()
+      } catch {
+        // A listener that fails is not the device's problem, and must not stop the others.
+      }
+    }
   }
 
   /**

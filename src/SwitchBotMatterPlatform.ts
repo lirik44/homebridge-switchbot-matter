@@ -326,24 +326,18 @@ export class SwitchBotMatterPlatform {
   }
 
   /**
-   * Refreshes an accessory shortly after a command, so a controller sees the result of its own
-   * action without waiting for the next sync.
+   * Listens to a device, so a change made anywhere reaches the Matter controllers.
    *
    * @param {string} uuid The accessory UUID.
    * @param {any} device The device instance, shared with the HAP platform.
    * @returns {void}
    */
   private _watchCommands(uuid: string, device: any): void {
-    if (!device || typeof device.setState !== 'function' || device._matterSyncHooked) {
+    if (typeof device?.onStateChanged !== 'function' || device._matterSyncHooked) {
       return
     }
 
-    const original = device.setState.bind(device)
-    device.setState = async (change: any) => {
-      const result = await original(change)
-      this._refreshAfterCommand(uuid)
-      return result
-    }
+    device.onStateChanged(() => this._refreshAfterCommand(uuid))
     device._matterSyncHooked = true
   }
 

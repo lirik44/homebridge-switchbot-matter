@@ -74,6 +74,7 @@ export class IRDevice extends DeviceBase {
     if (typeof change?.on === 'boolean') {
       this.on = change.on
       this.remember(change.on)
+      this.notifyStateChanged()
     }
   }
 
