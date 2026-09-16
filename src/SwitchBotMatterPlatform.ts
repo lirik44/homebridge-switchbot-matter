@@ -339,6 +339,7 @@ export class SwitchBotMatterPlatform {
     const original = device.setState.bind(device)
     device.setState = async (change: any) => {
       const result = await original(change)
+      this.log.debug(`[Matter] ${uuid} was commanded, refreshing shortly`)
       clearTimeout(this.refreshTimers.get(uuid))
       this.refreshTimers.set(uuid, setTimeout(() => void this._syncState(uuid), 1500))
       return result
@@ -350,6 +351,8 @@ export class SwitchBotMatterPlatform {
    * @returns {Promise<void>} Resolves once every accessory has been brought up to date.
    */
   private async _syncAllState(): Promise<void> {
+    // Logged on every pass, changes or not, so the log says whether the loop is still running.
+    this.log.debug(`[Matter] Sync pass over ${this.synced.size} accessory(ies)`)
     for (const uuid of this.synced.keys()) {
       await this._syncState(uuid)
     }
@@ -377,6 +380,7 @@ export class SwitchBotMatterPlatform {
         const key = `${uuid}:${cluster}`
         const payload = JSON.stringify(attributes)
         if (this.published.get(key) === payload) {
+          this.log.debug(`[Matter] ${entry.type} ${uuid}: ${cluster} unchanged at ${payload}`)
           continue
         }
 
