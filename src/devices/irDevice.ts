@@ -22,6 +22,8 @@ export class IRDevice extends DeviceBase {
   protected on: boolean
   /** Where that is kept, so a restart does not claim the lights went off. */
   private readonly stateFile: string | undefined
+  /** Tells one device object from another in the log, when there should only ever be one. */
+  private readonly tag = Math.random().toString(36).slice(2, 6)
 
   constructor(opts: DeviceOptions, cfg: SwitchBotPluginConfig) {
     super(opts, cfg)
@@ -32,6 +34,20 @@ export class IRDevice extends DeviceBase {
     const storagePath = (opts as any)?.storagePath ?? (cfg as any)?.storagePath
     this.stateFile = typeof storagePath === 'string' ? join(storagePath, 'switchbot-ir-state.json') : undefined
     this.on = this.readRemembered() ?? (opts as any)?.initialState === true
+    this.log.info(`[${this.opts.id}#${this.tag}] Built, remembering it as ${this.on ? 'on' : 'off'}`)
+  }
+
+  /**
+   * @param {boolean} on What the remote is now believed to be doing.
+   * @param {string} reason Who says so.
+   * @returns {void}
+   */
+  private record(on: boolean, reason: string): void {
+    if (this.on !== on) {
+      this.log.info(`[${this.opts.id}#${this.tag}] Now ${on ? 'on' : 'off'}, ${reason}`)
+    }
+    this.on = on
+    this.remember(on)
   }
 
   /**
@@ -72,8 +88,7 @@ export class IRDevice extends DeviceBase {
 
   noteCommandedState(change: Record<string, any>): void {
     if (typeof change?.on === 'boolean') {
-      this.on = change.on
-      this.remember(change.on)
+      this.record(change.on, 'another ecosystem commanded it')
       this.notifyStateChanged()
     }
   }
@@ -93,8 +108,7 @@ export class IRDevice extends DeviceBase {
       const result = await this.client.sendIRCommand(this.opts.id, command)
       // Only remember the new state once the hub accepted the command, so a failed press does
       // not leave the controller showing a light that was never turned on.
-      this.on = change.on
-      this.remember(change.on)
+      this.record(change.on, 'the remote was pressed here')
       this.log.debug(`[${this.opts.id}] Sent ${command} to the IR remote`)
       return { success: true, result }
     } catch (e) {
