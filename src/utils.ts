@@ -1379,3 +1379,115 @@ export function createPlatformProxy(HAPPlatform: any, MatterPlatform: any): any 
     }
   }
 }
+
+/**
+ * Reads what a device reports over HAP and maps it onto Matter cluster attributes.
+ *
+ * The HAP getters are what Apple Home shows, so taking the values from there is the only way the
+ * two halves of the plugin cannot drift apart: an IR remote that has no readable state, a curtain
+ * that remembers where it was last sent, a device read straight from the cloud - whatever answer
+ * HomeKit gets is the answer a Matter controller is told.
+ *
+ * @param {any} descriptor The HAP accessory descriptor, as `createHAPAccessory` builds it.
+ * @returns {Promise<Record<string, any> | undefined>} The cluster attributes, or undefined when
+ * there is nothing readable to report.
+ */
+export async function matterStateFromHap(descriptor: any): Promise<Record<string, any> | undefined> {
+  const services = descriptor?.services
+  if (!Array.isArray(services)) {
+    return undefined
+  }
+
+  const clusters: Record<string, any> = {}
+
+  for (const service of services) {
+    const characteristics = service?.characteristics ?? {}
+    const read = async (name: string): Promise<any> => {
+      const characteristic = characteristics[name]
+      if (!characteristic || typeof characteristic.get !== 'function') {
+        return undefined
+      }
+      try {
+        return await characteristic.get()
+      } catch {
+        // A value that cannot be read right now is left out; the next sync tries again.
+        return undefined
+      }
+    }
+
+    switch (service?.type) {
+      case 'Lightbulb':
+      case 'Switch':
+      case 'Outlet':
+      case 'Fan': {
+        const on = await read('On')
+        if (typeof on === 'boolean') {
+          clusters.onOff = { onOff: on }
+        }
+        const brightness = await read('Brightness')
+        if (typeof brightness === 'number') {
+          // Matter levels run 1-254, HomeKit brightness is a percentage.
+          clusters.levelControl = { currentLevel: Math.max(1, Math.min(254, Math.round(brightness * 2.54))) }
+        }
+        break
+      }
+
+      case 'WindowCovering': {
+        // HomeKit counts a covering from the closed end - 0 is closed, 100 is open - and Matter
+        // counts from the open end in hundredths of a percent. So the two are mirrored.
+        const lift = (value: number) => Math.max(0, Math.min(10000, Math.round((100 - value) * 100)))
+        const covering: Record<string, number> = {}
+        const current = await read('CurrentPosition')
+        if (typeof current === 'number') {
+          covering.currentPositionLiftPercent100ths = lift(current)
+        }
+        const target = await read('TargetPosition')
+        if (typeof target === 'number') {
+          covering.targetPositionLiftPercent100ths = lift(target)
+        }
+        if (Object.keys(covering).length > 0) {
+          clusters.windowCovering = covering
+        }
+        break
+      }
+
+      case 'TemperatureSensor': {
+        const temperature = await read('CurrentTemperature')
+        if (typeof temperature === 'number') {
+          clusters.temperatureMeasurement = { measuredValue: Math.round(temperature * 100) }
+        }
+        break
+      }
+
+      case 'HumiditySensor': {
+        const humidity = await read('CurrentRelativeHumidity')
+        if (typeof humidity === 'number') {
+          clusters.relativeHumidityMeasurement = { measuredValue: Math.round(humidity * 100) }
+        }
+        break
+      }
+
+      case 'ContactSensor': {
+        const contact = await read('ContactSensorState')
+        if (typeof contact === 'number') {
+          // HomeKit reports 0 when the contact is made, Matter reports true for the same thing.
+          clusters.booleanState = { stateValue: contact === 0 }
+        }
+        break
+      }
+
+      case 'MotionSensor': {
+        const motion = await read('MotionDetected')
+        if (typeof motion === 'boolean') {
+          clusters.occupancySensing = { occupancy: { occupied: motion } }
+        }
+        break
+      }
+
+      default:
+        break
+    }
+  }
+
+  return Object.keys(clusters).length > 0 ? clusters : undefined
+}

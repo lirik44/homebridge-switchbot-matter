@@ -5,7 +5,7 @@ import type { SwitchBotPluginConfig } from './settings.js'
 import { createDevice } from './deviceFactory.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
 import { SwitchBotClient } from './switchbotClient.js'
-import { collectConfiguredDevices, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
+import { collectConfiguredDevices, createMatterHandlers, DEVICE_MATTER_CLUSTERS, DEVICE_MATTER_SUPPORTED, matterStateFor, matterStateFromHap, normalizeTypeForMatter, resolveMatterDeviceType } from './utils.js'
 
 /**
  * Homebridge platform class for SwitchBot Matter integration.
@@ -51,13 +51,15 @@ export class SwitchBotMatterPlatform {
   /** Timestamp (ms) of last OpenAPI daily counter reset */
   private openApiLastReset = 0
   /** The accessories to keep in step with their devices, by UUID */
-  private synced: Map<string, { device: any, type: string }> = new Map()
+  private synced: Map<string, { device: any, type: string, hap?: any }> = new Map()
   /** The attributes last published per accessory and cluster, so an unchanged poll writes nothing */
   private published: Map<string, string> = new Map()
   /** Timer for the periodic state sync */
   private stateSyncInterval: NodeJS.Timeout | null = null
   /** Timers for the refresh that follows a command */
   private refreshTimers: Map<string, NodeJS.Timeout> = new Map()
+  /** Accessories already reported as unreadable or unpublishable, so the log is not repeated */
+  private syncComplaints: Set<string> = new Set()
 
   /**
    * Construct the SwitchBot Matter platform.
@@ -365,8 +367,9 @@ export class SwitchBotMatterPlatform {
     }
 
     try {
-      const clusters = matterStateFor(entry.type, await entry.device.getState())
+      const clusters = await this._readState(entry)
       if (!clusters) {
+        this._complainOnce(`${uuid}:unreadable`, `[Matter] Nothing readable to report for ${entry.type} ${uuid}`)
         return
       }
 
@@ -379,12 +382,64 @@ export class SwitchBotMatterPlatform {
 
         await matterApi.updateAccessoryState(uuid, cluster, attributes)
         this.published.set(key, payload)
-        this.log.debug(`[Matter] ${entry.type} ${uuid}: ${cluster} = ${payload}`)
+        // The first value of each cluster is worth seeing without turning on debug logging: it is
+        // the proof that the Matter side is being told anything at all.
+        const report = `[Matter] ${entry.type} ${uuid}: ${cluster} = ${payload}`
+        if (this.syncComplaints.has(`${key}:published`)) {
+          this.log.debug(report)
+        } else {
+          this.syncComplaints.add(`${key}:published`)
+          this.log.info(report)
+        }
       }
     } catch (e) {
-      // A device that cannot be read right now is reported again on the next sync.
-      this.log.debug(`[Matter] Could not sync ${uuid}:`, (e as Error)?.message)
+      this._complainOnce(`${uuid}:failed`, `[Matter] Could not sync ${entry.type} ${uuid}: ${(e as Error)?.message ?? e}`)
     }
+  }
+
+  /**
+   * Reads the state to report, preferring what the device answers over HAP.
+   *
+   * HomeKit asks the device for a value whenever it wants one, so the HAP getters are by
+   * definition what Apple Home shows. Reporting the same numbers to Matter is what keeps the two
+   * ecosystems from disagreeing, and it works for devices that have no readable state of their
+   * own - an IR remote, or a curtain that is only sure of where it was last sent.
+   *
+   * @param {{ device: any, type: string, hap?: any }} entry The synced accessory.
+   * @returns {Promise<Record<string, any> | undefined>} The cluster attributes to publish.
+   */
+  private async _readState(entry: { device: any, type: string, hap?: any }): Promise<Record<string, any> | undefined> {
+    if (entry.hap === undefined && typeof entry.device?.createHAPAccessory === 'function') {
+      try {
+        entry.hap = entry.device.createHAPAccessory(this.api) ?? null
+      } catch {
+        entry.hap = null
+      }
+    }
+
+    const fromHap = entry.hap ? await matterStateFromHap(entry.hap) : undefined
+    if (fromHap) {
+      return fromHap
+    }
+
+    // A device with no HAP service this plugin understands still has its own state to report.
+    return matterStateFor(entry.type, await entry.device.getState())
+  }
+
+  /**
+   * Logs something once per accessory, so a device that cannot be read does not fill the log.
+   *
+   * @param {string} key What is being complained about.
+   * @param {string} message The message to log.
+   * @returns {void}
+   */
+  private _complainOnce(key: string, message: string): void {
+    if (this.syncComplaints.has(key)) {
+      this.log.debug(message)
+      return
+    }
+    this.syncComplaints.add(key)
+    this.log.warn(message)
   }
 
   /**
@@ -476,6 +531,7 @@ export class SwitchBotMatterPlatform {
       clearTimeout(timer)
     }
     this.refreshTimers.clear()
+    this.syncComplaints.clear()
     if (this.configReloadInterval) {
       clearInterval(this.configReloadInterval)
       this.configReloadInterval = null

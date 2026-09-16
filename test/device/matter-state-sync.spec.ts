@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { matterStateFor } from '../../src/utils'
+import { matterStateFor, matterStateFromHap } from '../../src/utils'
 
 describe('matterStateFor', () => {
   // HomeKit asks for a value whenever it wants one; a Matter controller reads its own cached copy
@@ -55,5 +55,83 @@ describe('matterStateFor', () => {
     expect(matterStateFor('meter', {})).toBeUndefined()
     expect(matterStateFor('hub 2', { on: true })).toBeUndefined()
     expect(matterStateFor('ir light', undefined)).toBeUndefined()
+  })
+})
+
+describe('matterStateFromHap', () => {
+  // Whatever the HAP getters answer is what Apple Home shows, so reporting the same values over
+  // Matter is what keeps the two ecosystems from disagreeing.
+
+  function service(type: string, values: Record<string, any>) {
+    const characteristics: Record<string, any> = {}
+    for (const [name, value] of Object.entries(values)) {
+      characteristics[name] = { get: async () => value }
+    }
+    return { services: [{ type, characteristics }] }
+  }
+
+  it('mirrors a covering, because the two scales run in opposite directions', async () => {
+    // HomeKit counts from the closed end, Matter from the open one.
+    await expect(matterStateFromHap(service('WindowCovering', { CurrentPosition: 100, TargetPosition: 100 })))
+      .resolves
+      .toStrictEqual({ windowCovering: { currentPositionLiftPercent100ths: 0, targetPositionLiftPercent100ths: 0 } })
+    await expect(matterStateFromHap(service('WindowCovering', { CurrentPosition: 0, TargetPosition: 0 })))
+      .resolves
+      .toStrictEqual({ windowCovering: { currentPositionLiftPercent100ths: 10000, targetPositionLiftPercent100ths: 10000 } })
+    await expect(matterStateFromHap(service('WindowCovering', { CurrentPosition: 30, TargetPosition: 80 })))
+      .resolves
+      .toStrictEqual({ windowCovering: { currentPositionLiftPercent100ths: 7000, targetPositionLiftPercent100ths: 2000 } })
+  })
+
+  it('reports a lightbulb as on/off and a level', async () => {
+    await expect(matterStateFromHap(service('Lightbulb', { On: true, Brightness: 50 })))
+      .resolves
+      .toStrictEqual({ onOff: { onOff: true }, levelControl: { currentLevel: 127 } })
+  })
+
+  it('reports a bare switch, which is all an IR remote has', async () => {
+    await expect(matterStateFromHap(service('Lightbulb', { On: true }))).resolves.toStrictEqual({ onOff: { onOff: true } })
+    await expect(matterStateFromHap(service('Switch', { On: false }))).resolves.toStrictEqual({ onOff: { onOff: false } })
+  })
+
+  it('reports sensors in the hundredths Matter counts in', async () => {
+    await expect(matterStateFromHap(service('TemperatureSensor', { CurrentTemperature: 21.5 })))
+      .resolves
+      .toStrictEqual({ temperatureMeasurement: { measuredValue: 2150 } })
+    await expect(matterStateFromHap(service('HumiditySensor', { CurrentRelativeHumidity: 48 })))
+      .resolves
+      .toStrictEqual({ relativeHumidityMeasurement: { measuredValue: 4800 } })
+  })
+
+  it('reports a contact the way each side words it', async () => {
+    // HomeKit says 0 for a contact that is made, Matter says true.
+    await expect(matterStateFromHap(service('ContactSensor', { ContactSensorState: 0 })))
+      .resolves
+      .toStrictEqual({ booleanState: { stateValue: true } })
+    await expect(matterStateFromHap(service('MotionSensor', { MotionDetected: true })))
+      .resolves
+      .toStrictEqual({ occupancySensing: { occupancy: { occupied: true } } })
+  })
+
+  it('leaves out a value that could not be read rather than reporting a wrong one', async () => {
+    const descriptor = {
+      services: [{
+        type: 'WindowCovering',
+        characteristics: {
+          CurrentPosition: { get: async () => 40 },
+          TargetPosition: { get: async () => {
+            throw new Error('device unreachable')
+          } },
+        },
+      }],
+    }
+    await expect(matterStateFromHap(descriptor)).resolves.toStrictEqual({
+      windowCovering: { currentPositionLiftPercent100ths: 6000 },
+    })
+  })
+
+  it('reports nothing for a descriptor it cannot read', async () => {
+    await expect(matterStateFromHap(undefined)).resolves.toBeUndefined()
+    await expect(matterStateFromHap({ services: [{ type: 'Battery', characteristics: {} }] })).resolves.toBeUndefined()
   })
 })
