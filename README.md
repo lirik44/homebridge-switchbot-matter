@@ -1,328 +1,63 @@
-<span align="center">
+<h1 align="center">Homebridge SwitchBot — Matter fork</h1>
 
-<a href="https://github.com/homebridge/verified/blob/master/verified-plugins.json"><img alt="homebridge-verified" src="https://raw.githubusercontent.com/OpenWonderLabs/homebridge-switchbot/latest/branding/Homebridge_x_SwitchBot.svg?sanitize=true" width="350px"></a>
-
-# @switchbot/homebridge-switchbot
-
-[![npm version](https://badgen.net/npm/v/@switchbot/homebridge-switchbot)](https://www.npmjs.com/package/@switchbot/homebridge-switchbot)
-[![npm downloads](https://badgen.net/npm/dt/@switchbot/homebridge-switchbot)](https://www.npmjs.com/package/@switchbot/homebridge-switchbot)
-[![discord-switchbot](https://badgen.net/discord/online-members/5wYTbwP4ha?icon=discord&label=discord)](https://discord.gg/5wYTbwP4ha)
-
-<p>The Homebridge <a href="https://www.switch-bot.com">SwitchBot</a> plugin allows you to access your SwitchBot Device(s) from HomeKit with
-  <a href="https://homebridge.io">Homebridge</a>.
+<p align="center">
+    <a href="https://www.npmjs.com/package/homebridge">
+        <img src="https://img.shields.io/badge/powered%20by-homebridge-blue" alt="powered by homebridge">
+    </a>
+    <a href="#infrared-remotes-brought-back">
+        <img src="https://img.shields.io/badge/infrared-supported-brightgreen" alt="infrared remotes supported">
+    </a>
+    <a href="#both-ecosystems-at-once">
+        <img src="https://img.shields.io/badge/HAP%20%2B%20Matter-together-brightgreen" alt="HAP and Matter together">
+    </a>
+    <a href="LICENSE">
+        <img src="https://img.shields.io/badge/license-ISC-lightgrey" alt="license ISC">
+    </a>
 </p>
-
-</span>
-
-## Installation
-
-1. Search for "SwitchBot" on the plugin screen of [Homebridge Config UI X](https://github.com/oznu/homebridge-config-ui-x)
-2. Find: `@switchbot/homebridge-switchbot`
-   - See noble [prerequisites](https://github.com/abandonware/noble#prerequisites) for your OS. (This is used for BLE connection.)
-3. Click **Install**
-
-
-## Configuration
-
-### OpenAPI Polling/Rate Advanced Settings (UI)
-
-You can now configure global OpenAPI polling and rate-limiting options directly from the Homebridge UI:
-
-- Go to the SwitchBot plugin settings in Homebridge Config UI X.
-- Scroll to the **Advanced Settings** section at the bottom of the page.
-- Adjust the following options as needed:
-  - **OpenAPI Polling Interval (seconds):** How often to poll devices via OpenAPI for status. Default: 300 (5 min). Min: 30. Can be overridden per device.
-  - **Enable Batched OpenAPI Polling:** Poll all OpenAPI devices in a single batch at the configured interval. Devices with per-device refreshRate are excluded from the batch.
-  - **OpenAPI Batch Polling Interval (seconds):** Interval for batched OpenAPI polling. Falls back to OpenAPI Polling Interval if not set. Default: 300.
-  - **OpenAPI Daily Request Limit:** Maximum OpenAPI requests per day allowed by the plugin. Default: 10000.
-  - **OpenAPI Reserve for Commands:** Requests reserved for user actions. When remaining budget reaches this value, background polling pauses. Default: 1000.
-  - **Reset OpenAPI Counter at Local Midnight:** If true, resets the daily OpenAPI request counter at local midnight. If false, resets at UTC midnight.
-  - **Only Allow Webhooks on Reserve:** When remaining OpenAPI budget reaches the reserve, only webhooks and user commands are allowed. Background polling/discovery pauses.
-  - **OpenAPI Batch Concurrency:** Maximum number of parallel OpenAPI status calls during a batch. Default: 5.
-  - **OpenAPI Batch Jitter (seconds):** Random startup delay before the first batch to reduce synchronized spikes. Default: 0.
-
-Click **Save Advanced Settings** to apply changes. These settings match the options available in `config.schema.json` and can be overridden per device.
-
-<!-- Optionally add a screenshot here -->
-
-
-- ### If using OpenAPI Connection
-  1. Download SwitchBot App on App Store or Google Play Store
-  2. Register a SwitchBot account and log in into your account
-  3. Generate an Token within the App
-     - Click Bottom Profile Tab
-     - Click Preference
-     - Click App version 10 Times, this will enable Developer Options
-     - Click Developer Options
-     - Click Copy `token` to Clipboard
-  4. Input your `token` into the config parameter
-  5. Generate an Secret within the App
-     - Click Bottom Profile Tab
-     - Click Preference
-     - Click App version 10 Times, this will enable Developer Options
-     - Click Developer Options
-     - Click Copy `secret` to Clipboard
-  6. Input your `secret` into the config parameter
-- ### If using BLE Connection
-  1. Download SwitchBot App on App Store or Google Play Store
-  2. Register a SwitchBot account and log in into your account
-  3. Click on Device wanting to connect too plugin
-     - Click the Settings Gear
-     - Click Device Info
-     - Copy BLE Mac aka `deviceId`
-  4. Input your `deviceId` into the Device Config
-
-## Troubleshooting
-
-- ### If using Linux / Raspberry Pi OS
-  1. `bluetoothctl` must be installed on the device, otherwise it cannot communicate via Bluetooth. Enable it with `sudo bluetoothctl power on`.
-
-  2. If errors occur, while enabling it, restart the process:
-     - `rfkill block bluetooth`
-     - `rfkill unblock bluetooth`
-
-  3. Also make sure, that the computer can discover the SwitchBot device:
-     - `sudo bluetoothctl`
-     - `scan on`
-
-     This lists all discovered Bluetooth devices. The BLE address of the SwitchBot device should be included in this list, otherwise your computer does not discover it.
-
-- ### If using MacOS
-  1. Manually grant Bluetooth access in System Settings UI for `Security & Privacy -> Privacy` to the node executable, eg `/usr/local/bin/node`
-     ![Security & Privacy -> Privacy](assets/security-privacy-bluetooth.png)
-     (This is what is intended in documentation for the noble bluetooth package [prerequisites](https://github.com/abandonware/noble#prerequisites) by "Add terminal app", however for HomeBridge it is `node` that needs the permission granted, not `terminal`.
-     Without this step, then you will receive the following error when the swichbot plugin launches, which will cause Homebridge or the child bridge process to restart:
-  ```
-  Error: Failed to initialize the Noble object: unauthorized
-    at Noble.<anonymous> (file:///usr/local/lib/node_modules/@switchbot/homebridge-switchbot/node_modules/node-switchbot/src/switchbot.ts:244:19)
-    at Object.onceWrapper (node:events:629:26)
-    at Noble.emit (node:events:514:28)
-    at Noble.onStateChange (/usr/local/lib/node_modules/@switchbot/homebridge-switchbot/node_modules/@stoprocent/noble/lib/noble.js:92:8)
-    at NobleMac.emit (node:events:514:28)
-  ```
-
-## Supported SwitchBot Devices
-
-- [SwitchBot Humidifier](https://www.switch-bot.com/products/switchbot-smart-humidifier)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-    - Can Push Updates over OpenAPI
-    - Can Receive Updates over BLE and OpenAPI
-- [SwitchBot Evaporative Humidifier (Auto-refill)](https://www.switch-bot.com/products/switchbot-evaporative-humidifier-auto-refill)
-- [SwitchBot Meter](https://www.switch-bot.com/products/switchbot-meter)
-- [SwitchBot Meter Plus (US)](https://www.switch-bot.com/products/switchbot-meter-plus)
-- [SwitchBot Meter Plus (JP)](https://www.switchbot.jp/products/switchbot-meter-plus)
-- [SwitchBot Indoor/Outdoor Thermo-Hygrometer](https://www.switch-bot.com/products/switchbot-indoor-outdoor-thermo-hygrometer)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-  - If using Bluetooth Low Energy (BLE) only:
-    - Must supply `deviceId` & `deviceName` to Device Config
-    - Check `Enable Bluetooth Low Energy (BLE) Connection` on Device Config
-- [SwitchBot Motion Sensor](https://www.switch-bot.com/products/motion-sensor)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-  - If using Bluetooth Low Energy (BLE) only:
-    - Must supply `deviceId` & `deviceName` to Device Config
-    - Check `Enable Bluetooth Low Energy (BLE) Connection` on Device Config
-- [SwitchBot Contact Sensor](https://www.switch-bot.com/products/contact-sensor)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-  - If using Bluetooth Low Energy (BLE) only:
-    - Must supply `deviceId` & `deviceName` to Device Config
-    - Check `Enable Bluetooth Low Energy (BLE) Connection` on Device Config
-- [SwitchBot Curtain](https://www.switch-bot.com/products/switchbot-curtain)
-- [SwitchBot Curtain 3](https://www.switch-bot.com/products/switchbot-curtain-3)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-  - If using Bluetooth Low Energy (BLE) only:
-    - Must supply `deviceId` & `deviceName` to Device Config
-    - Check `Enable Bluetooth Low Energy (BLE) Connection` on Device Config
-- [SwitchBot Blind Tilt](https://us.switch-bot.com/products/switchbot-blind-tilt)
-  - Supports OpenAPI & partial Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-- [SwitchBot Bulb](https://www.switch-bot.com/products/switchbot-color-bulb)
-- [SwitchBot Ceiling Light](https://www.switchbot.jp/collections/all/products/switchbot-ceiling-light)
-- [SwitchBot Ceiling Light Pro](https://www.switchbot.jp/collections/all/products/switchbot-ceiling-light)
-- [SwitchBot Light Strip](https://www.switch-bot.com/products/switchbot-light-strip)
-  - Supports OpenAPI & partial Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-- [SwitchBot Lock](https://us.switch-bot.com/products/switchbot-lock)
-- [SwitchBot Lock Pro](https://www.switchbot.jp/products/switchbot-lock-pro)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-- US: [SwitchBot Mini Robot Vacuum K10+](https://www.switch-bot.com/products/switchbot-mini-robot-vacuum-k10)
-- US: [SwitchBot Floor Cleaning Robot S10](https://www.switch-bot.com/products/switchbot-floor-cleaning-robot-s10)
-- JP: [SwitchBot Robot Vacuum Cleaner S1](https://www.switchbot.jp/products/switchbot-robot-vacuum-cleaner)
-- JP: [SwitchBot Robot Vacuum Cleaner S1 Plus](https://www.switchbot.jp/products/switchbot-robot-vacuum-cleaner)
-  - Supports OpenAPI Connection Only
-- [SwitchBot Plug](https://www.switch-bot.com/products/switchbot-plug)
-- [SwitchBot Plug Mini (US)](https://www.switch-bot.com/products/switchbot-plug-mini)
-- [SwitchBot Plug Mini (JP)](https://www.switchbot.jp/products/switchbot-plug-mini)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-- [SwitchBot Bot](https://www.switch-bot.com/products/switchbot-bot)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-  - If using OpenAPI:
-    - [SwitchBot Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini), [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), or [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3) Required
-    - Enable Cloud Services for Device on SwitchBot App
-    - You must set your Bot's Device ID for either Press Mode or Switch Mode in Plugin Config (SwitchBot Device Settings > Bot Settings)
-      - Press Mode - Turns on then instantly turn it off
-      - Switch Mode - Turns on and keep it on until it is turned off
-        - This can get out of sync, since API doesn't give me a status
-        - To Correct you must go into the SwitchBot App and correct the status of either `On` or `Off`
-  - If using Bluetooth Low Energy (BLE) only:
-    - Must supply `deviceId` & `deviceName` to Device Config
-    - Check `Enable Bluetooth Low Energy (BLE) Connection` on Device Config
-- [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-    - Enables Humidity, Temperature, and Light Sensor
-- [SwitchBot Hub Mini 2](https://us.switch-bot.com/products/switchbot-hub-mini-2)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-    - Enables Humidity, Temperature, and Light Sensor
-- [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-    - Enables Humidity, Temperature, and Light Sensor
-- [SwitchBot Battery Circulator Fan](https://us.switch-bot.com/products/switchbot-battery-circulator-fan)
-  - Supports OpenAPI Connection Only
-- [SwitchBot Water Leak Detector](https://us.switch-bot.com/products/switchbot-water-leak-detector)
-  - Supports OpenAPI & Bluetooth Low Energy (BLE) Connections
-
-
-## BLE Encryption Support
-
-### BLE Encryption Key and Key ID
-
-Some SwitchBot devices (notably newer locks, curtains, and select sensors) require a BLE encryption key and keyId for secure Bluetooth communication. This plugin supports configuring these fields for each device.
-
-#### How to Obtain BLE Encryption Key and Key ID
-
-1. **Open the SwitchBot App** and select your device.
-2. Go to **Device Settings** (gear icon).
-3. Tap **Device Info**.
-4. If your device supports BLE encryption, you will see fields for **Encryption Key** and **Key ID**. (If not visible, your device may not require encryption or may need a firmware update.)
-5. Copy the **Encryption Key** and **Key ID** values.
-
-#### How to Configure in Homebridge
-
-In the Homebridge UI, when adding or editing a SwitchBot device, enter the **Encryption Key** and **Key ID** in the provided fields. These values will be securely used for BLE communication with your device.
-
-**Example device config excerpt:**
-
-```json
-{
-  "deviceId": "E7F8A1B2C3D4",
-  "deviceName": "SwitchBot Lock",
-  "enableBLE": true,
-  "encryptionKey": "0123456789abcdef0123456789abcdef",
-  "keyId": "01"
-}
-```
-
-#### Which Devices Require BLE Encryption?
-
-- SwitchBot Lock (and Lock Pro)
-- SwitchBot Curtain 3 (and some Curtain 2 with updated firmware)
-- Some sensors and new device models (see device info in app)
-
-If you are unsure, check your device's info in the SwitchBot app. If the fields are present, copy them into the plugin config.
-
-**Note:** If you enter an incorrect key or keyId, BLE communication will fail for that device. Double-check values if you encounter connection issues.
 
 ---
 
-## Supported IR Devices
+This is a fork of [`OpenWonderLabs/homebridge-switchbot`](https://github.com/OpenWonderLabs/homebridge-switchbot),
+which brings SwitchBot devices into HomeKit. Everything that plugin does, this one does.
 
-### _(All IR Devices require [SwitchBot Hub 2](https://us.switch-bot.com/products/switchbot-hub-2), [SwitchBot Hub Mini 2](https://us.switch-bot.com/products/switchbot-hub-mini-2), [SwitchBot Hub 3](https://us.switch-bot.com/products/switchbot-hub-3), or [Hub Mini](https://www.switch-bot.com/products/switchbot-hub-mini))_
+The fork exists because of three things: version 5 dropped infrared remotes, HomeKit and Matter could not
+be had at the same time, and what one ecosystem knew the other did not.
 
-- TV
-  - Allows for On/Off and Volume Controls
-  - Optional Disable Sending Power Command
-- Projector (Displayed as TV)
-  - Allows for On/Off and Volume Controls
-- Set Top Box (Displayed as Set Top Box)
-  - Allows for On/Off and Volume Controls
-- DVD (Displayed as Set Top Box)
-  - Allows for On/Off and Volume Controls
-- Streamer (Displayed as Streaming Stick)
-  - Allows for On/Off and Volume Controls
-- Speaker (Displayed as Speaker)
-  - Allows for On/Off and Volume Controls
-- Fans
-  - Allows for On/Off Controls
-  - Optional Rotation Speed
-  - Optional Swing Mode
-- Lights
-  - Allows for On/Off Controls
-- Air Purifiers
-  - Allows for On/Off Controls
-- Air Conditioners
-  - Allows for On/Off, Tempeture, and Mode Controls
-  - Optional Disable Auto Mode
-- Cameras
-  - Allows for On/Off Controls
-- Vacuum Cleaners
-  - Allows for On/Off Controls
-- Water Heaters
-  - Allows for On/Off Controls
-- Others
-  - Option to Display as differenet Device Type
-    - Supports Fan Device Type
-  - Allows for On/Off Controls
+## Infrared remotes brought back
 
-## Matter Platform
+An infrared remote is a code the hub blasts at an appliance; nothing answers, so a remote has no state to
+read — only the state the plugin remembers having sent, which is what the SwitchBot app shows too. Remotes
+are cloud-only and never appear in discovery, so commands go straight to the cloud API rather than through
+the device manager, which would look for a device that is not there.
 
-### Batched refresh and API load control
+What a remote was last told survives a restart, because the alternative is every restart claiming the
+lights went off.
 
-By default, the Matter platform uses a single batched refresh to update device status. You can tune or override this behavior with the following options under `options`:
+## Both ecosystems at once
 
-- `matterBatchEnabled` (boolean, default true): enable/disable platform-level batched refresh. Devices with a per-device `refreshRate` still run their own timers.
-- `matterBatchRefreshRate` (number, seconds): batch interval (falls back to `options.refreshRate`, then 300 if not set).
-- `matterBatchConcurrency` (number): limit of parallel OpenAPI status calls during a batch (default 5).
-- `matterBatchJitter` (number, seconds): random startup delay before the first batch to reduce synchronized spikes.
+HomeKit speaks HAP; everything else in a home — Alexa, SmartThings, Aqara — sees it over Matter. The
+devices are published both ways rather than one instead of the other, and both halves drive **the same
+device object**: curtains, blinds, bots, plugs, lights, meters and infrared remotes.
 
-Device-level override:
+That last part sounds like a detail and is the whole thing. The two platforms load their devices at the
+same time, and while the register of shared devices was written only after a device finished being built,
+both halves looked, found nothing, and each ended up with its own object — so each ecosystem had its own
+idea of what the garland was doing, and neither ever heard about the other's commands. The curtains
+escaped it by luck, being read back from the cloud either way.
 
-- If a device sets `refreshRate` in its config, it uses a per-device timer and is excluded from the platform batch.
+Beyond that: each half reports changes rather than waiting to be asked, a command from either side is
+followed by reading the device back a few times over the next forty seconds, and a command carrying the
+value this plugin has just reported is ignored — that is a controller keeping its own attributes in step,
+not a person pressing anything.
 
-Reliability and rate-limiting:
+## Cloud by default, Bluetooth on request
 
-- Each device status call retries with exponential backoff on non-success responses.
-- After exhausting retries, the device enters a short cooldown before being retried; cooldowns are persisted across restarts.
-- The batch worklist is randomized every cycle to further distribute API load.
+Upstream depends on `node-switchbot`, which carries a native Bluetooth stack compiled from C++ wherever
+the plugin is installed — minutes of it on a Raspberry Pi, on every install and every update. With a hub,
+none of it is needed: the SwitchBot cloud API is a signed HTTPS request, and this fork speaks it directly.
 
-These controls keep API usage smooth and predictable while preserving per-device control when needed.
-
-## What's new with node-switchbot v4.0.0
-
-- Matter-first: when Homebridge Matter is available the plugin now prefers registering Matter accessories (with HAP fallback).
-- Cloud by default: this fork talks to the SwitchBot cloud API directly and does not install a Bluetooth stack. See "Bluetooth" below.
-- OpenAPI credentials: cloud discovery and cloud fallback paths require both `openApiToken` and `openApiSecret`.
-- UI always served: the plugin UI is packaged into `dist/homebridge-ui` and is always served when Homebridge UI support is present; there is no platform-level opt-out.
-- OpenAPI hardening: OpenAPI calls have AbortController timeouts, jittered exponential backoff, per-device retry limits and cooldowns, and safe response parsing for resilient behavior.
-
-## Bluetooth
-
-This fork reaches devices through the SwitchBot hub and cloud. It does not depend on
-`node-switchbot`, which carries a native Bluetooth stack that is compiled from C++ wherever the
-plugin is installed - minutes of it on a Raspberry Pi, on every install and every update.
-
-To reach devices directly over Bluetooth instead - useful without a hub - install the library
-alongside the plugin and set `enableBLE: true`:
+To reach devices over Bluetooth instead — useful without a hub — install the library alongside the plugin
+and set `enableBLE: true`:
 
 ```
 npm --prefix /var/lib/homebridge install node-switchbot
@@ -330,50 +65,40 @@ npm --prefix /var/lib/homebridge install node-switchbot
 
 Without it, `enableBLE` is ignored and everything goes through the cloud.
 
-- Write coalescing (debounce): command writes to the same device are coalesced by default to avoid command floods. Configure with `writeDebounceMs` (milliseconds, default 100). Set to `0` to disable coalescing.
+## Also fixed
 
-See `MIGRATION.md` for migration notes and recommended upgrade steps.
+- A closed curtain reports 99 rather than 100: the motor stops where its calibration says, not at a round
+  number. Reported as it is, a closed curtain shows up as "1% open" in every app, and a controller just
+  told the curtain was closed watches it reopen a minute later. The last couple of percent at either end
+  are rounded off.
+- `open` and `close` were the Bluetooth library's words for a curtain; the cloud calls them `turnOn` and
+  `turnOff` and refuses anything else, so opening a curtain from a Matter controller failed outright.
 
-## OpenAPI rate limiting and daily budget
+## Installation
 
-To prevent hitting SwitchBot’s daily OpenAPI limit, the plugin provides several platform-level options under `options`:
-
-- `dailyApiLimit` (number, default 10000): maximum OpenAPI requests per day that the plugin will allow.
-- `dailyApiReserveForCommands` (number, default 1000): requests reserved for user actions so background polling pauses before the hard limit.
-- `webhookOnlyOnReserve` (boolean, default false): when remaining budget reaches the reserve, pause background polling/discovery; webhooks and commands continue until the hard limit.
-- `dailyApiResetLocalMidnight` (boolean, default false): if true, resets the daily counter at local midnight; when false, resets at UTC midnight.
-
-Example (excerpt):
-
-```json
-{
-  "options": {
-    "dailyApiLimit": 10000,
-    "dailyApiReserveForCommands": 1000,
-    "webhookOnlyOnReserve": false,
-    "dailyApiResetLocalMidnight": true
-  }
-}
+```
+npm --prefix /var/lib/homebridge install github:lirik44/homebridge-switchbot
 ```
 
-## SwitchBot APIs
+The package is published under a scoped name, so it lives alongside the upstream plugin rather than over
+it. Enable Matter for the child bridge this plugin runs in to have the same devices reach Matter apps.
 
-- [OpenWonderLabs/node-switchbot](https://github.com/OpenWonderLabs/node-switchbot)
-  - [OpenWonderLabs/SwitchBotAPI](https://github.com/OpenWonderLabs/SwitchBotAPI)
-  - [OpenWonderLabs/SwitchBotAPI-BLE](https://github.com/OpenWonderLabs/SwitchBotAPI-BLE)
+## Development
 
-## Development / Tests
+```
+npm install
+npm test
+npm run lint
+```
 
-- Run unit tests:
-  ```bash
-  npm run test
-  ```
+## Credits
 
-- Notes:
-  - Added Lock Ultra (Cloud + BLE) support with `node-switchbot` v4.
+- [OpenWonderLabs/homebridge-switchbot](https://github.com/OpenWonderLabs/homebridge-switchbot) — the
+  plugin this fork is based on
+- [OpenWonderLabs/node-switchbot](https://github.com/OpenWonderLabs/node-switchbot) — the Bluetooth
+  library, now optional
+- [homebridge/homebridge](https://github.com/homebridge/homebridge) — Homebridge, and its Matter support
 
-## Community
+## License
 
-- [SwitchBot (Official website)](https://www.switch-bot.com/)
-- [Facebook @SwitchBotRobot](https://www.facebook.com/SwitchBotRobot/)
-- [Twitter @SwitchBot](https://twitter.com/switchbot)
+ISC, same as the upstream project.

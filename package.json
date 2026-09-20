@@ -12,16 +12,6 @@
     }
   ],
   "license": "ISC",
-  "funding": [
-    {
-      "type": "Paypal",
-      "url": "https://paypal.me/donavanbecker"
-    },
-    {
-      "type": "GitHub",
-      "url": "https://github.com/sponsors/donavanbecker"
-    }
-  ],
   "homepage": "https://github.com/lirik44/homebridge-switchbot#readme",
   "repository": {
     "type": "git",
