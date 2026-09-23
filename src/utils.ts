@@ -86,6 +86,24 @@ export const DEVICE_MATTER_SUPPORTED: Record<string, boolean> = {
  * @example
  * DEVICE_MATTER_CLUSTERS['bot'] // { onOff: { onOff: false } }
  */
+/**
+ * What a battery-powered device starts with, before anything has been read. Declaring the cluster
+ * is what makes Homebridge advertise the PowerSource device type, and without that device type no
+ * controller has a reason to read the battery at all - the cluster alone is invisible.
+ */
+const BATTERY_CLUSTER = {
+  powerSource: {
+    status: 1,
+    order: 0,
+    description: 'Battery',
+    batPresent: true,
+    batReplaceability: 2,
+    batPercentRemaining: null,
+    batChargeLevel: 0,
+    batReplacementNeeded: false,
+  },
+}
+
 export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
   // An IR remote for a light is on/off and nothing else: the hub blasts a code and no appliance
   // reports back, so there is no brightness or colour to advertise.
@@ -139,6 +157,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
         tiltEncoderControlled: false,
       },
     },
+    ...BATTERY_CLUSTER,
   }, // WindowCovering → WindowCovering (includes curtain3, rollershade variants via normalization)
   'blindtilt': {
     windowCovering: {
@@ -162,6 +181,7 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
         tiltEncoderControlled: true,
       },
     },
+    ...BATTERY_CLUSTER,
   }, // WindowCovering with tilt → WindowCovering
   'fan': {
     onOff: { onOff: false },
@@ -199,17 +219,20 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       actuatorEnabled: true,
       operatingMode: 0,
     },
+    ...BATTERY_CLUSTER,
   }, // LockMechanism → DoorLock
   'motion': {
     occupancySensing: {
       occupancy: 0,
       occupancySensorType: 0,
     },
+    ...BATTERY_CLUSTER,
   }, // MotionSensor → OccupancySensing
   'contact': {
     booleanState: {
       stateValue: false,
     },
+    ...BATTERY_CLUSTER,
   }, // ContactSensor → BooleanState
   'humidifier': {
     onOff: { onOff: false },
@@ -254,11 +277,13 @@ export const DEVICE_MATTER_CLUSTERS: Record<string, any> = {
       minMeasuredValue: 0,
       maxMeasuredValue: 100,
     },
+    ...BATTERY_CLUSTER,
   }, // TemperatureSensor + HumiditySensor → TemperatureMeasurement + RelativeHumidityMeasurement
   'waterdetector': {
     booleanState: {
       stateValue: false,
     },
+    ...BATTERY_CLUSTER,
   }, // LeakSensor → BooleanState
 }
 
@@ -1428,6 +1453,20 @@ export async function matterStateFromHap(descriptor: any): Promise<Record<string
         if (typeof brightness === 'number') {
           // Matter levels run 1-254, HomeKit brightness is a percentage.
           clusters.levelControl = { currentLevel: Math.max(1, Math.min(254, Math.round(brightness * 2.54))) }
+        }
+        break
+      }
+
+      case 'Battery': {
+        // Matter encodes the percentage doubled - 100% is 200 - and grades it separately, so a
+        // controller can warn without doing the arithmetic itself.
+        const level = await read('BatteryLevel')
+        if (typeof level === 'number') {
+          clusters.powerSource = {
+            batPercentRemaining: Math.max(0, Math.min(200, Math.round(level * 2))),
+            batChargeLevel: level < 10 ? 2 : level < 20 ? 1 : 0,
+            batReplacementNeeded: level < 10,
+          }
         }
         break
       }
