@@ -477,6 +477,115 @@ export class GenericDevice extends DeviceBase {
       clusters,
     }
   }
+
+  /* ---------- battery ---------- */
+
+  // Anything that runs on batteries can publish them. The machinery lives here rather than in one
+  // device class so that adding a Battery service to a device is one line rather than a copy of
+  // all this.
+
+  protected lastBatteryLevel?: number
+  protected batteryRefreshing = false
+  protected batteryRefreshTs = 0
+  // Half an hour, not the thirty seconds a leak sensor needs: a battery does not move fast, and
+  // every read costs a call against an API that rate limits per token and starts refusing.
+  protected readonly BATTERY_REFRESH_TTL_MS = 30 * 60_000
+
+  /**
+   * @param state Anything the cloud answered with.
+   * @returns The battery percentage in it, clamped, or undefined when it carries none.
+   */
+  protected normalizeBatteryLevel(state: any): number | undefined {
+    const raw = state?.battery ?? state?.body?.battery
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return undefined
+    }
+    return Math.max(0, Math.min(100, raw))
+  }
+
+  /**
+   * @returns The device's status straight from the cloud API, or undefined without credentials.
+   */
+  protected async getOpenAPIStatus(): Promise<any> {
+    const token = this.cfg?.openApiToken
+    const secret = this.cfg?.openApiSecret
+    if (!token || !secret) {
+      return undefined
+    }
+
+    try {
+      const { OpenApiClient } = await import('../openApiClient.js')
+      return await new OpenApiClient(token, secret, this.log).getStatus(this.opts.id)
+    } catch (e) {
+      this.log?.debug?.(`[battery] direct OpenAPI refresh failed: ${(e as Error)?.message}`)
+    }
+
+    return undefined
+  }
+
+  /**
+   * @returns The battery percentage, or undefined when the cloud carries none.
+   */
+  protected async readBatteryLevel(): Promise<number | undefined> {
+    return this.normalizeBatteryLevel(await this.getOpenAPIStatus())
+  }
+
+  protected async refreshBattery(): Promise<void> {
+    if (this.batteryRefreshing) {
+      return
+    }
+    this.batteryRefreshing = true
+    try {
+      const battery = await this.readBatteryLevel()
+      if (typeof battery === 'number') {
+        this.lastBatteryLevel = battery
+        this.batteryRefreshTs = Date.now()
+      }
+    } catch (e) {
+      this.log?.debug?.(`[battery] refresh failed: ${(e as Error)?.message}`)
+    } finally {
+      this.batteryRefreshing = false
+    }
+  }
+
+  /**
+   * Answers from the cache and refreshes behind it. On a true cold start it refuses rather than
+   * inventing a number: HomeKit shows "not available", which is honest, where a fabricated 0 would
+   * read as a flat battery.
+   *
+   * @param api The Homebridge API, for its HAP status errors.
+   * @returns The battery percentage.
+   */
+  protected getBatteryFast(api: any): number {
+    if (Date.now() - this.batteryRefreshTs >= this.BATTERY_REFRESH_TTL_MS) {
+      this.refreshBattery().catch(() => undefined)
+    }
+    if (typeof this.lastBatteryLevel === 'number') {
+      return this.lastBatteryLevel
+    }
+    throw new api.hap.HapStatusError(api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE)
+  }
+
+  /**
+   * @param api The Homebridge API.
+   * @returns A Battery service, for a device that runs on them.
+   */
+  protected batteryService(api: any) {
+    return {
+      type: 'Battery',
+      characteristics: {
+        BatteryLevel: {
+          get: () => this.getBatteryFast(api),
+        },
+        StatusLowBattery: {
+          get: () => (this.getBatteryFast(api) < 20 ? 1 : 0),
+        },
+        ChargingState: {
+          get: () => 2,
+        },
+      },
+    }
+  }
 }
 
 // Specific device classes can extend GenericDevice for custom behavior.
@@ -574,6 +683,7 @@ export class CurtainDevice extends GenericDevice {
             },
           },
         },
+        this.batteryService(api),
       ],
     }
   }
@@ -981,6 +1091,7 @@ export class MotionSensorDevice extends GenericDevice {
             },
           },
         },
+        this.batteryService(api),
       ],
     }
   }
@@ -1040,6 +1151,7 @@ export class ContactSensorDevice extends GenericDevice {
             },
           },
         },
+        this.batteryService(api),
       ],
     }
   }
@@ -1076,6 +1188,7 @@ export class LockDevice extends GenericDevice {
             },
           },
         },
+        this.batteryService(api),
       ],
     }
   }
@@ -1368,6 +1481,7 @@ export class MeterDevice extends GenericDevice {
             },
           },
         },
+        this.batteryService(api),
       ],
     }
   }
@@ -1379,15 +1493,10 @@ export class WaterDetectorDevice extends GenericDevice {
   private lastLeakDetected?: boolean
   private readonly LEAK_REFRESH_TTL_MS = 30_000
 
-  private lastBatteryLevel?: number
-  private _batteryRefreshing = false
-  private _batteryRefreshTs = 0
-  private readonly BATTERY_REFRESH_TTL_MS = 30_000
-
   async init(): Promise<void> {
     await super.init()
     await this._refreshLeakState(!this.client)
-    await this._refreshBattery()
+    await this.refreshBattery()
   }
 
   private normalizeLeakDetected(state: any): boolean | undefined {
@@ -1407,31 +1516,6 @@ export class WaterDetectorDevice extends GenericDevice {
     if (typeof status === 'string') {
       return ['1', 'leak', 'leaked', 'detected', 'water_leak_detected'].includes(status.toLowerCase())
     }
-    return undefined
-  }
-
-  private normalizeBatteryLevel(state: any): number | undefined {
-    const raw = state?.battery ?? state?.body?.battery
-    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-      return undefined
-    }
-    return Math.max(0, Math.min(100, raw))
-  }
-
-  private async getOpenAPIStatus(): Promise<any> {
-    const token = this.cfg?.openApiToken
-    const secret = this.cfg?.openApiSecret
-    if (!token || !secret) {
-      return undefined
-    }
-
-    try {
-      const { OpenApiClient } = await import('../openApiClient.js')
-      return await new OpenApiClient(token, secret, this.log).getStatus(this.opts.id)
-    } catch (e) {
-      this.log?.debug?.(`[WaterDetector] direct OpenAPI refresh failed: ${(e as Error)?.message}`)
-    }
-
     return undefined
   }
 
@@ -1456,18 +1540,6 @@ export class WaterDetectorDevice extends GenericDevice {
     return undefined
   }
 
-  private async readBatteryLevel(): Promise<number | undefined> {
-    const status = await this.getOpenAPIStatus()
-    if (status) {
-      const battery = this.normalizeBatteryLevel(status)
-      if (typeof battery === 'number') {
-        return battery
-      }
-    }
-
-    return undefined
-  }
-
   private async _refreshLeakState(fallbackToDeviceState = true): Promise<void> {
     if (this._leakRefreshing) {
       return
@@ -1486,44 +1558,12 @@ export class WaterDetectorDevice extends GenericDevice {
     }
   }
 
-  private async _refreshBattery(): Promise<void> {
-    if (this._batteryRefreshing) {
-      return
-    }
-    this._batteryRefreshing = true
-    try {
-      const battery = await this.readBatteryLevel()
-      if (typeof battery === 'number') {
-        this.lastBatteryLevel = battery
-        this._batteryRefreshTs = Date.now()
-      }
-    } catch (e) {
-      this.log?.debug?.(`[WaterDetector] battery refresh failed: ${(e as Error)?.message}`)
-    } finally {
-      this._batteryRefreshing = false
-    }
-  }
-
   private getLeakDetectedFast(api: any): number {
     if (Date.now() - this._leakRefreshTs >= this.LEAK_REFRESH_TTL_MS) {
       this._refreshLeakState().catch(() => undefined)
     }
     if (typeof this.lastLeakDetected === 'boolean') {
       return this.lastLeakDetected ? 1 : 0
-    }
-    throw new api.hap.HapStatusError(api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE)
-  }
-
-  // Returns the cached battery level immediately and triggers a background
-  // refresh if the cache is stale. Throws HapStatusError on true cold start
-  // so HomeKit shows "Not Available" rather than fabricating a misleading
-  // value or timing out (which surfaces as 0% in the Home app).
-  private getBatteryFast(api: any): number {
-    if (Date.now() - this._batteryRefreshTs >= this.BATTERY_REFRESH_TTL_MS) {
-      this._refreshBattery().catch(() => undefined)
-    }
-    if (typeof this.lastBatteryLevel === 'number') {
-      return this.lastBatteryLevel
     }
     throw new api.hap.HapStatusError(api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE)
   }
@@ -1539,23 +1579,7 @@ export class WaterDetectorDevice extends GenericDevice {
             },
           },
         },
-        {
-          type: 'Battery',
-          characteristics: {
-            BatteryLevel: {
-              get: () => this.getBatteryFast(api),
-            },
-            StatusLowBattery: {
-              get: () => {
-                const b = this.getBatteryFast(api)
-                return b < 20 ? 1 : 0
-              },
-            },
-            ChargingState: {
-              get: () => 2,
-            },
-          },
-        },
+        this.batteryService(api),
       ],
     }
   }
